@@ -1,0 +1,410 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  SafeAreaView,
+} from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import api from '../services/api';
+import { Colors, TextStyles, Spacing, Shadows, BorderRadius } from '../styles/appleDesignSystem';
+
+type RootStackParamList = {
+  ChatDetail: { conversationId: string; userName: string };
+};
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+interface Conversation {
+  id: string;
+  community_id: string;
+  community_name: string;
+  other_user_id: string;
+  other_user_name: string;
+  other_user_profile_image?: string;
+  other_user_skill_level?: string;
+  last_message?: string;
+  last_message_time?: string;
+  unread_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Community {
+  id: string;
+  name: string;
+}
+
+const ChatScreen: React.FC = () => {
+  const navigation = useNavigation<NavigationProp>();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [selectedCommunityId, setSelectedCommunityId] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchCommunities = async () => {
+    try {
+      const response = await api.getUserCommunities();
+      setCommunities([
+        { id: 'all', name: 'All Communities' },
+        ...response.communities,
+      ]);
+    } catch (error) {
+      console.error('Error fetching communities:', error);
+    }
+  };
+
+  const fetchConversations = async () => {
+    try {
+      const communityId = selectedCommunityId === 'all' ? undefined : selectedCommunityId;
+      const response = await api.getConversations(communityId);
+      setConversations(response.conversations || []);
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCommunities();
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchConversations();
+    }, [selectedCommunityId])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchConversations();
+  };
+
+  const handleSelectCommunity = (communityId: string) => {
+    setSelectedCommunityId(communityId);
+    setLoading(true);
+  };
+
+  const formatTimestamp = (timestamp?: string) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const handleConversationPress = (conversation: Conversation) => {
+    navigation.navigate('ChatDetail', {
+      conversationId: conversation.id,
+      userName: conversation.other_user_name,
+    });
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Messages</Text>
+      </View>
+
+      {/* Community Filter */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterContainer}
+        contentContainerStyle={styles.filterContentContainer}
+      >
+        {communities.map((community) => (
+          <TouchableOpacity
+            key={community.id}
+            style={[
+              styles.filterButton,
+              selectedCommunityId === community.id && styles.filterButtonActive,
+            ]}
+            onPress={() => handleSelectCommunity(community.id)}
+          >
+            <Text
+              style={[
+                styles.filterButtonText,
+                selectedCommunityId === community.id && styles.filterButtonTextActive,
+              ]}
+            >
+              {community.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* Conversations List */}
+      {loading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.conversationsList}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={Colors.primary}
+            />
+          }
+        >
+          {conversations.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="chatbubbles-outline" size={64} color={Colors.textSecondary} />
+              <Text style={styles.emptyText}>No conversations yet</Text>
+              <Text style={styles.emptySubtext}>
+                Start chatting with members from your communities
+              </Text>
+            </View>
+          ) : (
+            conversations.map((conversation) => (
+              <TouchableOpacity
+                key={conversation.id}
+                style={styles.conversationItem}
+                onPress={() => handleConversationPress(conversation)}
+              >
+                {/* Avatar */}
+                <View style={styles.avatarContainer}>
+                  {conversation.other_user_profile_image ? (
+                    <Image
+                      source={{ uri: conversation.other_user_profile_image }}
+                      style={styles.avatar}
+                    />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Text style={styles.avatarText}>
+                        {conversation.other_user_name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  {conversation.unread_count > 0 && (
+                    <View style={styles.unreadBadge}>
+                      <Text style={styles.unreadBadgeText}>
+                        {conversation.unread_count > 9 ? '9+' : conversation.unread_count}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Content */}
+                <View style={styles.conversationContent}>
+                  <View style={styles.conversationHeader}>
+                    <Text style={styles.userName} numberOfLines={1}>
+                      {conversation.other_user_name}
+                    </Text>
+                    <Text style={styles.timestamp}>
+                      {formatTimestamp(conversation.last_message_time)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.conversationBody}>
+                    <View style={styles.messagePreviewContainer}>
+                      <Text style={styles.communityTag} numberOfLines={1}>
+                        {conversation.community_name}
+                      </Text>
+                      {conversation.last_message && (
+                        <Text style={styles.lastMessage} numberOfLines={1}>
+                          {conversation.last_message}
+                        </Text>
+                      )}
+                    </View>
+                    {conversation.unread_count > 0 && (
+                      <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      )}
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    backgroundColor: Colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  headerTitle: {
+    ...TextStyles.largeTitle,
+    color: Colors.text,
+  },
+  filterContainer: {
+    backgroundColor: Colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  filterContentContainer: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  filterButton: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    marginRight: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  filterButtonActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  filterButtonText: {
+    ...TextStyles.body,
+    color: Colors.text,
+  },
+  filterButtonTextActive: {
+    color: Colors.white,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  conversationsList: {
+    flex: 1,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: Spacing.xl * 3,
+    paddingHorizontal: Spacing.xl,
+  },
+  emptyText: {
+    ...TextStyles.headline,
+    color: Colors.text,
+    marginTop: Spacing.lg,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    ...TextStyles.body,
+    color: Colors.textSecondary,
+    marginTop: Spacing.xs,
+    textAlign: 'center',
+  },
+  conversationItem: {
+    flexDirection: 'row',
+    padding: Spacing.md,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginRight: Spacing.md,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.full,
+  },
+  avatarPlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    ...TextStyles.headline,
+    color: Colors.white,
+    fontWeight: '600',
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: Colors.error,
+    borderRadius: BorderRadius.full,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xs / 2,
+    borderWidth: 2,
+    borderColor: Colors.white,
+  },
+  unreadBadgeText: {
+    ...TextStyles.caption2,
+    color: Colors.white,
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  conversationContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  conversationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs / 2,
+  },
+  userName: {
+    ...TextStyles.headline,
+    color: Colors.text,
+    fontWeight: '600',
+    flex: 1,
+  },
+  timestamp: {
+    ...TextStyles.caption1,
+    color: Colors.textSecondary,
+    marginLeft: Spacing.xs,
+  },
+  conversationBody: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  messagePreviewContainer: {
+    flex: 1,
+  },
+  communityTag: {
+    ...TextStyles.caption1,
+    color: Colors.primary,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  lastMessage: {
+    ...TextStyles.body,
+    color: Colors.textSecondary,
+  },
+});
+
+export default ChatScreen;

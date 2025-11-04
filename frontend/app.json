@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Padel One",
+    "slug": "padel-one",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "bundleIdentifier": "com.rossdingley.padelone",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.rossdingley.padelone"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ],
+    "owner": "dingley207"
+  }
+}

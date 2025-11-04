@@ -1,0 +1,24 @@
+{
+  "name": "padel-community-app",
+  "version": "1.0.0",
+  "description": "Padel Community App - Session booking platform",
+  "private": true,
+  "scripts": {
+    "install-all": "npm install --prefix backend && npm install --prefix frontend",
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm start --prefix frontend\"",
+    "backend": "npm run dev --prefix backend",
+    "frontend": "npm start --prefix frontend"
+  },
+  "keywords": [
+    "padel",
+    "booking",
+    "react-native",
+    "expo",
+    "nodejs"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
