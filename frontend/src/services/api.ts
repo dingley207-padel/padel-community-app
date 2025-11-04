@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
 // Get API URL from environment variables
-const API_URL = Constants.expoConfig?.extra?.apiUrl || process.env.EXPO_PUBLIC_API_URL || process.env.API_URL || 'https://unfrigid-scott-bifurcately.ngrok-free.dev/api';
+const API_URL = Constants.expoConfig?.extra?.apiUrl || process.env.EXPO_PUBLIC_API_URL || process.env.API_URL || 'https://padel-community-app-production.up.railway.app/api';
 
 class ApiService {
   private client: AxiosInstance;
