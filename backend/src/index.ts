@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes';
 import sessionRoutes from './routes/sessionRoutes';
+import sessionTemplateRoutes from './routes/sessionTemplateRoutes';
 import bookingRoutes from './routes/bookingRoutes';
 import communityRoutes from './routes/communityRoutes';
 import roleRoutes from './routes/roleRoutes';
@@ -21,9 +22,9 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
   credentials: true,
 }));
-// Default body size limit (will be overridden for specific routes)
-app.use(express.json({ limit: '100kb' }));
-app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+// Default body size limit - 10MB to support profile images
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging middleware
 app.use((req: Request, _res: Response, next: NextFunction) => {
@@ -43,6 +44,7 @@ app.get('/health', (_req: Request, res: Response) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/session-templates', sessionTemplateRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/communities', communityRoutes);
 app.use('/api/roles', roleRoutes);

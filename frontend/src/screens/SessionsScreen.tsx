@@ -236,9 +236,11 @@ export default function SessionsScreen({ onNavigateToProfile, onNavigateToMyBook
   };
 
   const handleSessionPress = (session: Session) => {
+    const availableSpots = session.max_players - (session.booked_count || 0);
+
     Alert.alert(
       session.title,
-      `${session.description || 'Join this session!'}\n\nDate: ${formatDate(session.datetime)} at ${formatTime(session.datetime)}\nLocation: ${session.location}\nPrice: AED ${session.price}\n\nSpots: ${session.available_spots} / ${session.max_players} available`,
+      `${session.description || 'Join this session!'}\n\nDate: ${formatDate(session.datetime)} at ${formatTime(session.datetime)}\nLocation: ${session.location}\nPrice: AED ${session.price}\n\nSpots: ${availableSpots} / ${session.max_players} available`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -249,20 +251,23 @@ export default function SessionsScreen({ onNavigateToProfile, onNavigateToMyBook
     );
   };
 
-  const renderSession = ({ item }: { item: Session }) => (
-    <TouchableOpacity
-      style={styles.sessionCard}
-      onPress={() => handleSessionPress(item)}
-    >
-      <View style={styles.sessionHeader}>
-        <View style={styles.sessionTitleRow}>
-          <Text style={styles.sessionTitle} numberOfLines={1}>{item.title}</Text>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>
-              {(item.available_spots || 0) > 0 ? 'Available' : 'Full'}
-            </Text>
+  const renderSession = ({ item }: { item: Session }) => {
+    const availableSpots = item.max_players - (item.booked_count || 0);
+
+    return (
+      <TouchableOpacity
+        style={styles.sessionCard}
+        onPress={() => handleSessionPress(item)}
+      >
+        <View style={styles.sessionHeader}>
+          <View style={styles.sessionTitleRow}>
+            <Text style={styles.sessionTitle} numberOfLines={1}>{item.title}</Text>
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusText}>
+                {availableSpots > 0 ? 'Available' : 'Full'}
+              </Text>
+            </View>
           </View>
-        </View>
 
         {item.community_name && (
           <View style={styles.communityBadge}>
@@ -298,13 +303,14 @@ export default function SessionsScreen({ onNavigateToProfile, onNavigateToMyBook
         </View>
       </View>
 
-      <View style={styles.sessionMetadata}>
-        <Text style={styles.sessionSpots}>
-          {item.available_spots} / {item.max_players} spots available
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+        <View style={styles.sessionMetadata}>
+          <Text style={styles.sessionSpots}>
+            {availableSpots} / {item.max_players} spots available
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (isLoading) {
     return (

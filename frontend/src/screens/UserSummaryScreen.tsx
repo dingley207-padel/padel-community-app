@@ -294,7 +294,7 @@ export default function UserSummaryScreen({ onNavigateToAnnouncements, onOpenMen
         <View style={styles.profileCard}>
           {/* Grade badge in top right */}
           <View style={styles.skillBadge}>
-            <Ionicons name="trophy" size={12} color={Colors.brand} />
+            <Ionicons name="trophy" size={12} color="#8FFE09" />
             <Text style={styles.skillBadgeText}>
               Grade {user?.skill_level || 'N/A'}
             </Text>
@@ -547,16 +547,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
-    backgroundColor: '#F0F0F0',  // Light grey background
+    backgroundColor: '#000000',  // Black background
     borderRadius: BorderRadius.full,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#000000',  // Black outline
     gap: 4,
   },
   skillBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#000000',  // BLACK TEXT
+    color: '#8FFE09',  // Green text
   },
 
   // SECTIONS

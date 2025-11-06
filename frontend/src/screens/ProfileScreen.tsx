@@ -531,6 +531,7 @@ export default function ProfileScreen({ onBack }: { onBack: () => void }) {
           <TouchableOpacity
             style={styles.dropdown}
             onPress={() => setShowGradeModal(true)}
+            activeOpacity={0.8}
           >
             <Text style={[styles.dropdownText, !grade && styles.dropdownPlaceholder]}>
               {grade || 'Select your grade'}
@@ -799,22 +800,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',  // Light grey background
-    borderWidth: 1,
-    borderColor: '#E0E0E0',  // Light grey border
+    backgroundColor: '#000000',  // Black background
+    borderWidth: 2,
+    borderColor: '#000000',  // Black border
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
   },
   dropdownText: {
     fontSize: TextStyles.callout.fontSize,
-    color: '#000000',  // Black text
+    color: '#8FFE09',  // Green text
   },
   dropdownPlaceholder: {
-    color: '#999999',  // Grey placeholder
+    color: '#8FFE09',  // Green placeholder
   },
   dropdownArrow: {
     fontSize: TextStyles.caption.fontSize,
-    color: '#666666',  // Medium grey
+    color: '#8FFE09',  // Green arrow
   },
   modalOverlay: {
     flex: 1,

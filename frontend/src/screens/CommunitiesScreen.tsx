@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 import { Colors, TextStyles, Spacing, Shadows, BorderRadius } from '../styles/appleDesignSystem';
+import SubCommunitySelectionModal from '../components/SubCommunitySelectionModal';
 
 interface Community {
   id: string;
@@ -38,6 +39,8 @@ export default function CommunitiesScreen({ onBack, onCreateCommunity, isSuperAd
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [joiningIds, setJoiningIds] = useState<Set<string>>(new Set());
   const [selectedFilter, setSelectedFilter] = useState<'my' | 'other'>('my');
+  const [showSubCommunityModal, setShowSubCommunityModal] = useState(false);
+  const [selectedCommunityForModal, setSelectedCommunityForModal] = useState<Community | null>(null);
 
   useEffect(() => {
     loadCommunities();
@@ -60,8 +63,14 @@ export default function CommunitiesScreen({ onBack, onCreateCommunity, isSuperAd
       const allComms = allResponse.communities || allResponse.data?.communities || [];
       const myComms = myResponse.communities || myResponse.data?.communities || [];
 
-      setAllCommunities(allComms);
-      setMyCommunities(myComms);
+      // Filter out sub-communities from all communities list (only show parent communities)
+      const parentCommunitiesOnly = allComms.filter((c: any) => !c.parent_community_id);
+
+      // Filter out sub-communities from user's communities list (only show parent communities)
+      const myParentCommunitiesOnly = myComms.filter((c: any) => !c.parent_community_id);
+
+      setAllCommunities(parentCommunitiesOnly);
+      setMyCommunities(myParentCommunitiesOnly);
     } catch (error: any) {
       console.error('Load communities error:', error);
       Alert.alert('Error', 'Failed to load communities');
@@ -82,19 +91,50 @@ export default function CommunitiesScreen({ onBack, onCreateCommunity, isSuperAd
   const handleJoinCommunity = async (community: Community) => {
     setJoiningIds((prev) => new Set(prev).add(community.id));
     try {
-      await api.joinCommunity(community.id);
-      // Refresh to get updated list
-      await loadCommunities();
-      Alert.alert('Success', `You've joined ${community.name}!`);
+      // Check if community has sub-communities first
+      const subCommunities = await api.getSubCommunities(community.id);
+
+      if (subCommunities.length > 0) {
+        // Show modal for sub-community selection
+        setSelectedCommunityForModal(community);
+        setShowSubCommunityModal(true);
+        setJoiningIds((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(community.id);
+          return newSet;
+        });
+      } else {
+        // No sub-communities, join normally
+        await api.joinCommunity(community.id);
+        await loadCommunities();
+        Alert.alert('Success', `You've joined ${community.name}!`);
+        setJoiningIds((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(community.id);
+          return newSet;
+        });
+      }
     } catch (error: any) {
+      console.error('[CommunitiesScreen] Join error:', error);
       Alert.alert('Error', error.response?.data?.error || 'Failed to join community');
-    } finally {
       setJoiningIds((prev) => {
         const newSet = new Set(prev);
         newSet.delete(community.id);
         return newSet;
       });
     }
+  };
+
+  const handleModalComplete = async () => {
+    setShowSubCommunityModal(false);
+    setSelectedCommunityForModal(null);
+    await loadCommunities();
+  };
+
+  const handleModalSkip = async () => {
+    setShowSubCommunityModal(false);
+    setSelectedCommunityForModal(null);
+    await loadCommunities();
   };
 
   const handleViewCommunity = (community: Community) => {
@@ -115,7 +155,12 @@ export default function CommunitiesScreen({ onBack, onCreateCommunity, isSuperAd
     const isProcessing = joiningIds.has(item.id);
 
     return (
-      <View style={styles.communityCard}>
+      <TouchableOpacity
+        style={styles.communityCard}
+        onPress={() => (joined ? handleViewCommunity(item) : handleJoinCommunity(item))}
+        disabled={isProcessing}
+        activeOpacity={0.7}
+      >
         {/* Community Logo */}
         <View style={styles.logoContainer}>
           {item.profile_image ? (
@@ -131,44 +176,28 @@ export default function CommunitiesScreen({ onBack, onCreateCommunity, isSuperAd
           )}
         </View>
 
-        {/* Community Info */}
+        {/* Community Info - Takes full width */}
         <View style={styles.communityInfo}>
-          <View style={styles.communityHeader}>
-            <Text style={styles.communityName}>{item.name}</Text>
-            {joined && (
-              <View style={styles.joinedBadge}>
-                <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
-                <Text style={styles.joinedText}>Joined</Text>
-              </View>
-            )}
-          </View>
+          <Text style={styles.communityName} numberOfLines={1}>{item.name}</Text>
           {item.location && (
             <View style={styles.locationContainer}>
               <Ionicons name="location-outline" size={14} color={Colors.secondary} />
-              <Text style={styles.communityLocation}>{item.location}</Text>
+              <Text style={styles.communityLocation} numberOfLines={1}>{item.location}</Text>
             </View>
           )}
         </View>
 
-        {/* Join/View Button */}
-        <TouchableOpacity
-          style={[
-            styles.actionButton,
-            joined ? styles.viewButton : styles.joinButton,
-            isProcessing && styles.disabledButton,
-          ]}
-          onPress={() => (joined ? handleViewCommunity(item) : handleJoinCommunity(item))}
-          disabled={isProcessing}
-        >
-          {isProcessing ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={[styles.actionButtonText, joined && styles.viewButtonText]}>
-              {joined ? 'View' : 'Join'}
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
+        {/* Chevron or Loading Indicator */}
+        {isProcessing ? (
+          <ActivityIndicator size="small" color={Colors.brand} />
+        ) : (
+          <Ionicons
+            name="chevron-forward"
+            size={24}
+            color="#000000"
+          />
+        )}
+      </TouchableOpacity>
     );
   };
 
@@ -284,6 +313,17 @@ export default function CommunitiesScreen({ onBack, onCreateCommunity, isSuperAd
           <Ionicons name="add" size={28} color="#FFFFFF" />
         </TouchableOpacity>
       )}
+
+      {/* Sub-Community Selection Modal */}
+      {selectedCommunityForModal && (
+        <SubCommunitySelectionModal
+          visible={showSubCommunityModal}
+          parentCommunityId={selectedCommunityForModal.id}
+          parentCommunityName={selectedCommunityForModal.name}
+          onComplete={handleModalComplete}
+          onSkip={handleModalSkip}
+        />
+      )}
     </View>
   );
 }
@@ -307,9 +347,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   appName: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 36,
+    fontWeight: '800',
     color: '#000000',
+    letterSpacing: 0.5,
   },
   ballIcon: {
     marginLeft: -2,
@@ -343,23 +384,29 @@ const styles = StyleSheet.create({
   },
   filterTabBlack: {
     flex: 1,
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: '#000000',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    backgroundColor: '#000000',
+    borderWidth: 2,
+    borderColor: '#000000',
   },
   filterTabActive: {
-    backgroundColor: Colors.brand,
+    backgroundColor: '#8FFE09',
+    borderColor: '#000000',
+    borderWidth: 2,
   },
   filterTabTextWhite: {
-    fontSize: 16,
-    fontWeight: '500',
+    ...TextStyles.subheadline,
     color: '#FFFFFF',
+    fontWeight: '500',
   },
   filterTabTextActive: {
     color: '#000000',
-    fontWeight: '700',
+    fontWeight: '600',
   },
   listContainer: {
     padding: Spacing.md,
@@ -369,11 +416,11 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
     borderWidth: 2,
     borderColor: '#000000',
-    padding: 16,
+    padding: Spacing.md,
     marginBottom: Spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing.md,
   },
   logoContainer: {
     width: 60,
@@ -397,37 +444,13 @@ const styles = StyleSheet.create({
   },
   communityInfo: {
     flex: 1,
-  },
-  communityHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    justifyContent: 'center',
+    gap: 4,
   },
   communityName: {
     fontSize: 18,
     fontWeight: '600',
     color: Colors.primary,
-    flex: 1,
-  },
-  joinedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#000000',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  joinedText: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  communityDescription: {
-    fontSize: 14,
-    color: Colors.secondary,
-    marginBottom: 6,
   },
   locationContainer: {
     flexDirection: 'row',
@@ -437,30 +460,7 @@ const styles = StyleSheet.create({
   communityLocation: {
     fontSize: 13,
     color: Colors.secondary,
-  },
-  actionButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  joinButton: {
-    backgroundColor: Colors.green,
-  },
-  viewButton: {
-    backgroundColor: '#000000',  // Black background for View button
-  },
-  viewButtonText: {
-    color: Colors.brand,  // Green text for View button
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
-  actionButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
+    flex: 1,
   },
   emptyContainer: {
     flex: 1,

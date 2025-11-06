@@ -118,7 +118,7 @@ export const createPaymentIntentHandler = async (
     // Get session details
     const { data: session, error: sessionError } = await supabase
       .from('sessions')
-      .select('*, communities(stripe_account_id)')
+      .select('*, communities!sessions_community_id_fkey(stripe_account_id)')
       .eq('id', session_id)
       .single();
 
@@ -205,9 +205,9 @@ export const confirmBookingAfterPaymentHandler = async (
     }
 
     // Get session details
-    const { data: session, error: sessionError } = await supabase
+    const { data: session, error: sessionError} = await supabase
       .from('sessions')
-      .select('*, communities(stripe_account_id)')
+      .select('*, communities!sessions_community_id_fkey(stripe_account_id)')
       .eq('id', session_id)
       .single();
 

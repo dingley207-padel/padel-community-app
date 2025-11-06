@@ -11,7 +11,7 @@ export const createBooking = async (
   // Get session details
   const { data: session, error: sessionError } = await supabase
     .from('sessions')
-    .select('*, communities(stripe_account_id)')
+    .select('*, communities!sessions_community_id_fkey(stripe_account_id)')
     .eq('id', sessionId)
     .single();
 
@@ -137,8 +137,15 @@ export const getUserBookings = async (userId: string) => {
     .from('bookings')
     .select(`
       *,
-      sessions (*,
-        communities (name, location)
+      sessions (
+        id,
+        title,
+        datetime,
+        location,
+        price,
+        status,
+        community_id,
+        communities!sessions_community_id_fkey (name, location)
       ),
       payments (*)
     `)
@@ -303,7 +310,7 @@ export const takePendingCancellationSpot = async (
   // Get the pending cancellation booking
   const { data: oldBooking, error: oldBookingError } = await supabase
     .from('bookings')
-    .select('*, sessions(*, communities(stripe_account_id)), payments(*)')
+    .select('*, sessions(*, communities!sessions_community_id_fkey(stripe_account_id)), payments(*)')
     .eq('id', bookingId)
     .eq('cancellation_status', 'pending_replacement')
     .single();

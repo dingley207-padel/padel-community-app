@@ -21,6 +21,13 @@ import CreateCommunityScreen from '../screens/CreateCommunityScreen';
 import AssignManagerScreen from '../screens/AssignManagerScreen';
 import MemberTabNavigator from './MemberTabNavigator';
 import EditCommunityScreen from '../screens/EditCommunityScreen';
+import SubCommunitiesManagerScreen from '../screens/SubCommunitiesManagerScreen';
+import SessionTemplatesManagerScreen from '../screens/SessionTemplatesManagerScreen';
+import BulkSessionPublishScreen from '../screens/BulkSessionPublishScreen';
+import ManageManagersScreen from '../screens/ManageManagersScreen';
+import SendNotificationScreen from '../screens/SendNotificationScreen';
+import EditSessionScreen from '../screens/EditSessionScreen';
+import SendSessionNotificationScreen from '../screens/SendSessionNotificationScreen';
 
 interface AppNavigatorProps {
   initialAuthStep?: 'register' | 'login';
@@ -42,12 +49,14 @@ export default function AppNavigator({ initialAuthStep }: AppNavigatorProps = {}
   const [showQuickLogin, setShowQuickLogin] = useState(false);
   const [checkingPin, setCheckingPin] = useState(true);
   const [storedUserName, setStoredUserName] = useState<string | undefined>(undefined);
-  const [currentScreen, setCurrentScreen] = useState<'sessions' | 'profile' | 'createSession' | 'managerSessions' | 'sessionAttendees' | 'myBookings' | 'members' | 'communities' | 'createCommunity' | 'assignManager' | 'editCommunity'>('sessions');
+  const [currentScreen, setCurrentScreen] = useState<'sessions' | 'profile' | 'createSession' | 'managerSessions' | 'sessionAttendees' | 'editSession' | 'sendSessionNotification' | 'myBookings' | 'members' | 'communities' | 'createCommunity' | 'assignManager' | 'editCommunity' | 'subCommunities' | 'sessionTemplates' | 'bulkPublish' | 'manageManagers' | 'sendNotification'>('sessions');
   const [showRoleSelector, setShowRoleSelector] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedSessionTitle, setSelectedSessionTitle] = useState<string>('');
+  const [selectedSessionAttendeeCount, setSelectedSessionAttendeeCount] = useState<number>(0);
   const [managerSessionsInitialTab, setManagerSessionsInitialTab] = useState<'active' | 'completed' | 'cancelled'>('active');
   const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(null);
+  const [selectedCommunityName, setSelectedCommunityName] = useState<string>('');
   const [isAppLocked, setIsAppLocked] = useState(false);
   const appState = useRef(AppState.currentState);
   const lastUnlockTime = useRef<number>(0);
@@ -275,7 +284,36 @@ export default function AppNavigator({ initialAuthStep }: AppNavigatorProps = {}
             setSelectedSessionTitle(sessionTitle);
             setCurrentScreen('sessionAttendees');
           }}
+          onEditSession={(sessionId: string) => {
+            setSelectedSessionId(sessionId);
+            setCurrentScreen('editSession');
+          }}
+          onSendNotification={(sessionId: string, sessionTitle: string, attendeeCount: number) => {
+            setSelectedSessionId(sessionId);
+            setSelectedSessionTitle(sessionTitle);
+            setSelectedSessionAttendeeCount(attendeeCount);
+            setCurrentScreen('sendSessionNotification');
+          }}
           initialTab={managerSessionsInitialTab}
+        />
+      );
+    } else if (currentScreen === 'editSession' && selectedSessionId) {
+      return (
+        <EditSessionScreen
+          sessionId={selectedSessionId}
+          onBack={() => setCurrentScreen('managerSessions')}
+          onSessionUpdated={() => {
+            setCurrentScreen('managerSessions');
+          }}
+        />
+      );
+    } else if (currentScreen === 'sendSessionNotification' && selectedSessionId) {
+      return (
+        <SendSessionNotificationScreen
+          sessionId={selectedSessionId}
+          sessionTitle={selectedSessionTitle}
+          attendeeCount={selectedSessionAttendeeCount}
+          onGoBack={() => setCurrentScreen('managerSessions')}
         />
       );
     } else if (currentScreen === 'sessionAttendees' && selectedSessionId) {
@@ -301,8 +339,13 @@ export default function AppNavigator({ initialAuthStep }: AppNavigatorProps = {}
           onCommunityCreated={() => setCurrentScreen('communities')}
         />
       );
-    } else if (currentScreen === 'members') {
-      return <MembersScreen onBack={() => setCurrentScreen('sessions')} />;
+    } else if (currentScreen === 'members' && selectedCommunityId) {
+      return (
+        <MembersScreen
+          communityId={selectedCommunityId}
+          onBack={() => setCurrentScreen('sessions')}
+        />
+      );
     } else if (currentScreen === 'assignManager') {
       return (
         <AssignManagerScreen
@@ -319,21 +362,89 @@ export default function AppNavigator({ initialAuthStep }: AppNavigatorProps = {}
           }}
         />
       );
+    } else if (currentScreen === 'subCommunities' && selectedCommunityId && selectedCommunityName) {
+      return (
+        <SubCommunitiesManagerScreen
+          communityId={selectedCommunityId}
+          communityName={selectedCommunityName}
+          onBack={() => setCurrentScreen('sessions')}
+        />
+      );
+    } else if (currentScreen === 'sessionTemplates' && selectedCommunityId && selectedCommunityName) {
+      return (
+        <SessionTemplatesManagerScreen
+          communityId={selectedCommunityId}
+          communityName={selectedCommunityName}
+          onBack={() => setCurrentScreen('sessions')}
+          onBulkPublish={() => setCurrentScreen('bulkPublish')}
+        />
+      );
+    } else if (currentScreen === 'bulkPublish' && selectedCommunityId && selectedCommunityName) {
+      return (
+        <BulkSessionPublishScreen
+          communityId={selectedCommunityId}
+          communityName={selectedCommunityName}
+          onBack={() => setCurrentScreen('sessionTemplates')}
+          onComplete={() => {
+            setCurrentScreen('managerSessions');
+            setManagerSessionsInitialTab('active');
+          }}
+        />
+      );
+    } else if (currentScreen === 'manageManagers' && selectedCommunityId && selectedCommunityName) {
+      return (
+        <ManageManagersScreen
+          communityId={selectedCommunityId}
+          communityName={selectedCommunityName}
+          onGoBack={() => setCurrentScreen('sessions')}
+        />
+      );
+    } else if (currentScreen === 'sendNotification' && selectedCommunityId && selectedCommunityName) {
+      return (
+        <SendNotificationScreen
+          communityId={selectedCommunityId}
+          communityName={selectedCommunityName}
+          onGoBack={() => setCurrentScreen('sessions')}
+        />
+      );
     }
     return (
       <CommunityManagerDashboard
         onNavigateToCreateSession={() => setCurrentScreen('createSession')}
         onNavigateToProfile={() => setCurrentScreen('profile')}
         onNavigateToViewSessions={(initialTab) => {
-          if (initialTab) setManagerSessionsInitialTab(initialTab);
+          setManagerSessionsInitialTab(initialTab || 'active');
           setCurrentScreen('managerSessions');
         }}
-        onNavigateToMembers={() => setCurrentScreen('members')}
+        onNavigateToMembers={(communityId) => {
+          setSelectedCommunityId(communityId);
+          setCurrentScreen('members');
+        }}
         onNavigateToCommunities={() => setCurrentScreen('communities')}
         onNavigateToAssignManager={() => setCurrentScreen('assignManager')}
         onNavigateToEditCommunity={(communityId) => {
           setSelectedCommunityId(communityId);
           setCurrentScreen('editCommunity');
+        }}
+        onNavigateToSendNotification={(communityId, communityName) => {
+          setSelectedCommunityId(communityId);
+          setSelectedCommunityName(communityName);
+          setCurrentScreen('sendNotification');
+        }}
+        onNavigateToSubCommunities={(communityId, communityName) => {
+          setSelectedCommunityId(communityId);
+          setSelectedCommunityName(communityName);
+          setCurrentScreen('subCommunities');
+        }}
+        onNavigateToSessionTemplates={(communityId, communityName) => {
+          setSelectedCommunityId(communityId);
+          setSelectedCommunityName(communityName);
+          setCurrentScreen('sessionTemplates');
+        }}
+        onNavigateToManageManagers={(communityId, communityName) => {
+          setSelectedCommunityId(communityId);
+          setSelectedCommunityName(communityName);
+          setCurrentScreen('manageManagers');
         }}
         onSwitchRole={() => setShowRoleSelector(true)}
       />
@@ -357,7 +468,36 @@ export default function AppNavigator({ initialAuthStep }: AppNavigatorProps = {}
             setSelectedSessionTitle(sessionTitle);
             setCurrentScreen('sessionAttendees');
           }}
+          onEditSession={(sessionId: string) => {
+            setSelectedSessionId(sessionId);
+            setCurrentScreen('editSession');
+          }}
+          onSendNotification={(sessionId: string, sessionTitle: string, attendeeCount: number) => {
+            setSelectedSessionId(sessionId);
+            setSelectedSessionTitle(sessionTitle);
+            setSelectedSessionAttendeeCount(attendeeCount);
+            setCurrentScreen('sendSessionNotification');
+          }}
           initialTab={managerSessionsInitialTab}
+        />
+      );
+    } else if (currentScreen === 'editSession' && selectedSessionId) {
+      return (
+        <EditSessionScreen
+          sessionId={selectedSessionId}
+          onBack={() => setCurrentScreen('managerSessions')}
+          onSessionUpdated={() => {
+            setCurrentScreen('managerSessions');
+          }}
+        />
+      );
+    } else if (currentScreen === 'sendSessionNotification' && selectedSessionId) {
+      return (
+        <SendSessionNotificationScreen
+          sessionId={selectedSessionId}
+          sessionTitle={selectedSessionTitle}
+          attendeeCount={selectedSessionAttendeeCount}
+          onGoBack={() => setCurrentScreen('managerSessions')}
         />
       );
     } else if (currentScreen === 'sessionAttendees' && selectedSessionId) {
@@ -368,8 +508,13 @@ export default function AppNavigator({ initialAuthStep }: AppNavigatorProps = {}
           onBack={() => setCurrentScreen('managerSessions')}
         />
       );
-    } else if (currentScreen === 'members') {
-      return <MembersScreen onBack={() => setCurrentScreen('sessions')} />;
+    } else if (currentScreen === 'members' && selectedCommunityId) {
+      return (
+        <MembersScreen
+          communityId={selectedCommunityId}
+          onBack={() => setCurrentScreen('sessions')}
+        />
+      );
     } else if (currentScreen === 'editCommunity' && selectedCommunityId) {
       return (
         <EditCommunityScreen
@@ -380,19 +525,87 @@ export default function AppNavigator({ initialAuthStep }: AppNavigatorProps = {}
           }}
         />
       );
+    } else if (currentScreen === 'subCommunities' && selectedCommunityId && selectedCommunityName) {
+      return (
+        <SubCommunitiesManagerScreen
+          communityId={selectedCommunityId}
+          communityName={selectedCommunityName}
+          onBack={() => setCurrentScreen('sessions')}
+        />
+      );
+    } else if (currentScreen === 'sessionTemplates' && selectedCommunityId && selectedCommunityName) {
+      return (
+        <SessionTemplatesManagerScreen
+          communityId={selectedCommunityId}
+          communityName={selectedCommunityName}
+          onBack={() => setCurrentScreen('sessions')}
+          onBulkPublish={() => setCurrentScreen('bulkPublish')}
+        />
+      );
+    } else if (currentScreen === 'bulkPublish' && selectedCommunityId && selectedCommunityName) {
+      return (
+        <BulkSessionPublishScreen
+          communityId={selectedCommunityId}
+          communityName={selectedCommunityName}
+          onBack={() => setCurrentScreen('sessionTemplates')}
+          onComplete={() => {
+            setCurrentScreen('managerSessions');
+            setManagerSessionsInitialTab('active');
+          }}
+        />
+      );
+    } else if (currentScreen === 'manageManagers' && selectedCommunityId && selectedCommunityName) {
+      return (
+        <ManageManagersScreen
+          communityId={selectedCommunityId}
+          communityName={selectedCommunityName}
+          onGoBack={() => setCurrentScreen('sessions')}
+        />
+      );
+    } else if (currentScreen === 'sendNotification' && selectedCommunityId && selectedCommunityName) {
+      return (
+        <SendNotificationScreen
+          communityId={selectedCommunityId}
+          communityName={selectedCommunityName}
+          onGoBack={() => setCurrentScreen('sessions')}
+        />
+      );
     }
     return (
       <CommunityManagerDashboard
         onNavigateToCreateSession={() => setCurrentScreen('createSession')}
         onNavigateToProfile={() => setCurrentScreen('profile')}
         onNavigateToViewSessions={(initialTab) => {
-          if (initialTab) setManagerSessionsInitialTab(initialTab);
+          setManagerSessionsInitialTab(initialTab || 'active');
           setCurrentScreen('managerSessions');
         }}
-        onNavigateToMembers={() => setCurrentScreen('members')}
+        onNavigateToMembers={(communityId) => {
+          setSelectedCommunityId(communityId);
+          setCurrentScreen('members');
+        }}
         onNavigateToEditCommunity={(communityId) => {
           setSelectedCommunityId(communityId);
           setCurrentScreen('editCommunity');
+        }}
+        onNavigateToSendNotification={(communityId, communityName) => {
+          setSelectedCommunityId(communityId);
+          setSelectedCommunityName(communityName);
+          setCurrentScreen('sendNotification');
+        }}
+        onNavigateToSubCommunities={(communityId, communityName) => {
+          setSelectedCommunityId(communityId);
+          setSelectedCommunityName(communityName);
+          setCurrentScreen('subCommunities');
+        }}
+        onNavigateToSessionTemplates={(communityId, communityName) => {
+          setSelectedCommunityId(communityId);
+          setSelectedCommunityName(communityName);
+          setCurrentScreen('sessionTemplates');
+        }}
+        onNavigateToManageManagers={(communityId, communityName) => {
+          setSelectedCommunityId(communityId);
+          setSelectedCommunityName(communityName);
+          setCurrentScreen('manageManagers');
         }}
         onSwitchRole={() => setShowRoleSelector(true)}
       />

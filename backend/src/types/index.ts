@@ -1,6 +1,6 @@
 import { Request } from 'express';
 
-export type UserRole = 'member' | 'community_manager' | 'super_admin';
+export type UserRole = 'member' | 'community_manager' | 'community_owner' | 'super_admin';
 export type OTPMedium = 'email' | 'whatsapp';
 export type SessionStatus = 'active' | 'cancelled' | 'completed';
 export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded';
@@ -43,9 +43,11 @@ export interface Community {
 export interface Session {
   id: string;
   community_id: string;
+  sub_community_id?: string;
   title: string;
   description?: string;
   datetime: Date;
+  duration_minutes?: number;
   location: string;
   google_maps_url?: string;
   price: number;
@@ -55,6 +57,7 @@ export interface Session {
   visibility: boolean;
   free_cancellation_hours?: number;
   allow_conditional_cancellation?: boolean;
+  created_from_template_id?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -111,15 +114,19 @@ export interface JWTPayload {
 
 export interface CreateSessionDTO {
   community_id: string;
+  sub_community_id?: string;
   title: string;
   description?: string;
   datetime: string;
+  duration_minutes?: number;
   location: string;
+  google_maps_url?: string;
   price: number;
   max_players: number;
   visibility?: boolean;
   free_cancellation_hours?: number;
   allow_conditional_cancellation?: boolean;
+  created_from_template_id?: string;
 }
 
 export interface CreateBookingDTO {
@@ -174,4 +181,44 @@ export interface SendNotificationDTO {
   community_id?: string;
   session_id?: string;
   recipient_ids?: string[];
+}
+
+export interface SessionTemplate {
+  id: string;
+  community_id: string;
+  sub_community_id?: string;
+  title: string;
+  description?: string;
+  day_of_week: number; // 0=Sunday, 6=Saturday
+  time_of_day: string; // HH:MM:SS format
+  duration_minutes: number;
+  price: number;
+  max_players: number;
+  free_cancellation_hours: number;
+  allow_conditional_cancellation: boolean;
+  is_active: boolean;
+  created_by: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateSessionTemplateDTO {
+  community_id: string;
+  sub_community_id?: string;
+  title: string;
+  description?: string;
+  day_of_week: number;
+  time_of_day: string;
+  duration_minutes?: number;
+  price: number;
+  max_players: number;
+  free_cancellation_hours?: number;
+  allow_conditional_cancellation?: boolean;
+  is_active?: boolean;
+}
+
+export interface BulkCreateSessionsDTO {
+  template_ids: string[];
+  weeks_ahead: number; // How many weeks to create (e.g., 4 = next 4 weeks)
+  start_date?: string; // Optional: start from specific date, defaults to next occurrence
 }

@@ -14,6 +14,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 import { Colors, TextStyles, Spacing, Shadows, BorderRadius } from '../styles/appleDesignSystem';
+import ChatSelectionModal from '../components/ChatSelectionModal';
 
 type RootStackParamList = {
   ChatDetail: { communityId: string; communityName: string };
@@ -25,6 +26,7 @@ interface CommunityChat {
   community_id: string;
   community_name: string;
   community_profile_image?: string;
+  parent_community_id?: string | null;
   member_count: number;
   last_message?: string;
   last_message_time?: string;
@@ -36,11 +38,18 @@ const ChatScreen: React.FC = () => {
   const [chats, setChats] = useState<CommunityChat[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showChatSelectionModal, setShowChatSelectionModal] = useState(false);
+  const [selectedParentChat, setSelectedParentChat] = useState<CommunityChat | null>(null);
 
   const fetchChats = async () => {
     try {
       const response = await api.getCommunityChats();
-      setChats(response.chats || []);
+      const allChats = response.chats || [];
+
+      // Filter to show only parent communities (where parent_community_id is null)
+      const parentChats = allChats.filter((chat: CommunityChat) => !chat.parent_community_id);
+
+      setChats(parentChats);
     } catch (error) {
       console.error('Error fetching community chats:', error);
     } finally {
@@ -79,12 +88,45 @@ const ChatScreen: React.FC = () => {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const handleChatPress = (chat: CommunityChat) => {
+  const handleChatPress = async (chat: CommunityChat) => {
+    // Check if this community has sub-communities
+    try {
+      const subCommunities = await api.getSubCommunities(chat.community_id);
+
+      if (subCommunities.length > 0) {
+        // Show selection modal
+        setSelectedParentChat(chat);
+        setShowChatSelectionModal(true);
+      } else {
+        // No sub-communities, navigate directly to chat
+        navigation.navigate('ChatDetail', {
+          communityId: chat.community_id,
+          communityName: chat.community_name,
+          communityProfileImage: chat.community_profile_image,
+        });
+      }
+    } catch (error) {
+      console.error('Error checking sub-communities:', error);
+      // If error, navigate to chat anyway
+      navigation.navigate('ChatDetail', {
+        communityId: chat.community_id,
+        communityName: chat.community_name,
+        communityProfileImage: chat.community_profile_image,
+      });
+    }
+  };
+
+  const handleSelectChat = (communityId: string, communityName: string, communityImage?: string) => {
     navigation.navigate('ChatDetail', {
-      communityId: chat.community_id,
-      communityName: chat.community_name,
-      communityProfileImage: chat.community_profile_image,
+      communityId,
+      communityName,
+      communityProfileImage: communityImage,
     });
+  };
+
+  const handleCloseModal = () => {
+    setShowChatSelectionModal(false);
+    setSelectedParentChat(null);
   };
 
   return (
@@ -165,6 +207,18 @@ const ChatScreen: React.FC = () => {
             ))
           )}
         </ScrollView>
+      )}
+
+      {/* Chat Selection Modal */}
+      {selectedParentChat && (
+        <ChatSelectionModal
+          visible={showChatSelectionModal}
+          parentCommunityId={selectedParentChat.community_id}
+          parentCommunityName={selectedParentChat.community_name}
+          parentCommunityImage={selectedParentChat.community_profile_image}
+          onSelectChat={handleSelectChat}
+          onClose={handleCloseModal}
+        />
       )}
     </View>
   );

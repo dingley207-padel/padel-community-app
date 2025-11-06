@@ -149,14 +149,15 @@ export class RoleController {
         return;
       }
 
-      // Check if user has access (super admin or community manager)
+      // Check if user has access (super admin, owner, or manager)
       const isSuperAdmin = await RoleService.isSuperAdmin(req.user.id);
+      const isOwner = await RoleService.isCommunityOwner(req.user.id, communityId);
       const isManager = await RoleService.isCommunityManager(
         req.user.id,
         communityId
       );
 
-      if (!isSuperAdmin && !isManager) {
+      if (!isSuperAdmin && !isOwner && !isManager) {
         res.status(403).json({ error: 'Access denied' });
         return;
       }
@@ -167,6 +168,115 @@ export class RoleController {
     } catch (error: any) {
       console.error('Error getting community managers:', error);
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Assign community manager role (owners and super admins only)
+   */
+  static async assignCommunityManager(
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const { communityId } = req.params;
+      const { user_id } = req.body;
+
+      if (!communityId || !user_id) {
+        res.status(400).json({ error: 'communityId and user_id are required' });
+        return;
+      }
+
+      await RoleService.assignCommunityManager(
+        communityId,
+        user_id,
+        req.user.id
+      );
+
+      res.status(201).json({
+        message: 'Manager role assigned successfully',
+        community_id: communityId,
+        user_id,
+      });
+    } catch (error: any) {
+      console.error('Error assigning manager:', error);
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Revoke community manager role (owners and super admins only)
+   */
+  static async revokeCommunityManager(
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const { communityId, userId } = req.params;
+
+      if (!communityId || !userId) {
+        res.status(400).json({ error: 'communityId and userId are required' });
+        return;
+      }
+
+      await RoleService.revokeCommunityManager(
+        communityId,
+        userId,
+        req.user.id
+      );
+
+      res.json({
+        message: 'Manager role revoked successfully',
+        community_id: communityId,
+        user_id: userId,
+      });
+    } catch (error: any) {
+      console.error('Error revoking manager:', error);
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Search users to add as managers (owners and super admins only)
+   */
+  static async searchUsersForManager(
+    req: AuthRequest,
+    res: Response
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const { communityId } = req.params;
+      const { search } = req.query;
+
+      if (!communityId || !search || typeof search !== 'string') {
+        res.status(400).json({ error: 'communityId and search are required' });
+        return;
+      }
+
+      const users = await RoleService.searchUsersForManager(
+        search,
+        communityId,
+        req.user.id
+      );
+
+      res.json({ users });
+    } catch (error: any) {
+      console.error('Error searching users:', error);
+      res.status(400).json({ error: error.message });
     }
   }
 

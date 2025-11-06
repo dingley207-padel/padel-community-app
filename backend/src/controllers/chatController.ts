@@ -28,11 +28,12 @@ export const getUserCommunityChats = async (req: AuthRequest, res: Response) => 
 
     const communityIds = memberships.map(m => m.community_id);
 
-    // Get community details with last message info
+    // Get community details with last message info - only parent communities
     const { data: communities, error: commError } = await supabase
       .from('communities')
-      .select('id, name, profile_image')
-      .in('id', communityIds);
+      .select('id, name, profile_image, parent_community_id')
+      .in('id', communityIds)
+      .is('parent_community_id', null);
 
     if (commError) {
       console.error('Error fetching communities:', commError);
@@ -60,6 +61,7 @@ export const getUserCommunityChats = async (req: AuthRequest, res: Response) => 
           community_id: community.id,
           community_name: community.name,
           community_profile_image: community.profile_image,
+          parent_community_id: community.parent_community_id,
           member_count: memberCount || 0,
           last_message: lastMessage?.content,
           last_message_time: lastMessage?.created_at,

@@ -29,12 +29,16 @@ interface Session {
 interface ManagerSessionsScreenProps {
   onBack: () => void;
   onViewAttendees: (sessionId: string, sessionTitle: string) => void;
+  onEditSession: (sessionId: string) => void;
+  onSendNotification: (sessionId: string, sessionTitle: string, attendeeCount: number) => void;
   initialTab?: 'active' | 'completed' | 'cancelled';
 }
 
 export default function ManagerSessionsScreen({
   onBack,
   onViewAttendees,
+  onEditSession,
+  onSendNotification,
   initialTab = 'active',
 }: ManagerSessionsScreenProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -46,6 +50,11 @@ export default function ManagerSessionsScreen({
     loadSessions();
   }, []);
 
+  // Update selected status when initialTab changes
+  useEffect(() => {
+    setSelectedStatus(initialTab);
+  }, [initialTab]);
+
   const loadSessions = async () => {
     try {
       // Fetch all sessions - we'll filter client-side by datetime
@@ -53,7 +62,7 @@ export default function ManagerSessionsScreen({
       setSessions(response.sessions || []);
     } catch (error) {
       console.error('Error loading sessions:', error);
-      Alert.alert('Error', 'Failed to load sessions');
+      Alert.alert('Error', 'Failed to load matches');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -105,7 +114,7 @@ export default function ManagerSessionsScreen({
 
   const handleCancelSession = async (sessionId: string, sessionTitle: string) => {
     Alert.alert(
-      'Cancel Session',
+      'Cancel Match',
       `Are you sure you want to cancel "${sessionTitle}"? All attendees will be notified.`,
       [
         { text: 'No', style: 'cancel' },
@@ -115,12 +124,12 @@ export default function ManagerSessionsScreen({
           onPress: async () => {
             try {
               await api.cancelSession(sessionId);
-              Alert.alert('Success', 'Session cancelled successfully');
+              Alert.alert('Success', 'Match cancelled successfully');
               loadSessions();
             } catch (error: any) {
               Alert.alert(
                 'Error',
-                error?.response?.data?.error || 'Failed to cancel session'
+                error?.response?.data?.error || 'Failed to cancel match'
               );
             }
           },
@@ -134,10 +143,10 @@ export default function ManagerSessionsScreen({
     const isActive = item.status === 'active';
 
     return (
-      <View style={styles.sessionCard}>
-        <View style={styles.sessionHeader}>
-          <View style={styles.sessionTitleRow}>
-            <Text style={styles.sessionTitle}>{item.title}</Text>
+      <View style={styles.matchCard}>
+        <View style={styles.matchHeader}>
+          <View style={styles.matchTitleRow}>
+            <Text style={styles.matchTitle}>{item.title}</Text>
             <View
               style={[
                 styles.statusBadge,
@@ -149,24 +158,33 @@ export default function ManagerSessionsScreen({
               </Text>
             </View>
           </View>
-          <Text style={styles.sessionPrice}>AED {item.price}</Text>
         </View>
 
         {item.community_name && (
-          <Text style={styles.sessionCommunity}>{item.community_name}</Text>
+          <Text style={styles.matchCommunity}>{item.community_name}</Text>
         )}
 
-        <View style={styles.sessionInfo}>
-          <Text style={styles.sessionDate}>
-            📅 {formatDate(item.datetime)} at {formatTime(item.datetime)}
-          </Text>
-          <Text style={styles.sessionLocation}>📍 {item.location}</Text>
+        <View style={styles.matchInfoContainer}>
+          <View style={styles.matchInfoRow}>
+            <Text style={styles.matchInfoIcon}>📅</Text>
+            <Text style={styles.matchInfoText}>
+              {formatDate(item.datetime)} at {formatTime(item.datetime)}
+            </Text>
+          </View>
+          <View style={styles.matchInfoRow}>
+            <Text style={styles.matchInfoIcon}>📍</Text>
+            <Text style={styles.matchInfoText}>{item.location}</Text>
+          </View>
+          <View style={styles.matchInfoRow}>
+            <Text style={styles.matchInfoIcon}>💰</Text>
+            <Text style={styles.matchPriceText}>AED {item.price}</Text>
+          </View>
         </View>
 
         {/* Booking Progress */}
         <View style={styles.bookingProgress}>
           <View style={styles.progressHeader}>
-            <Text style={styles.progressLabel}>Bookings</Text>
+            <Text style={styles.progressLabel}>Players</Text>
             <Text style={styles.progressValue}>
               {item.booked_count} / {item.max_players}
             </Text>
@@ -185,22 +203,39 @@ export default function ManagerSessionsScreen({
         </View>
 
         {/* Actions */}
-        <View style={styles.actionsRow}>
+        <View style={styles.actionsColumn}>
           <TouchableOpacity
             style={styles.viewAttendeesButton}
             onPress={() => onViewAttendees(item.id, item.title)}
           >
             <Text style={styles.viewAttendeesButtonText}>
-              👥 View Attendees ({item.booked_count})
+              View Players ({item.booked_count})
             </Text>
           </TouchableOpacity>
 
           {isActive && (
+            <View style={styles.actionsRow}>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => onEditSession(item.id)}
+              >
+                <Text style={styles.editButtonText}>Edit Match</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => handleCancelSession(item.id, item.title)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel Match</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {isActive && item.booked_count > 0 && (
             <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => handleCancelSession(item.id, item.title)}
+              style={styles.notifyButton}
+              onPress={() => onSendNotification(item.id, item.title, item.booked_count)}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.notifyButtonText}>Send Notification</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -230,24 +265,25 @@ export default function ManagerSessionsScreen({
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Compact Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Sessions</Text>
+        <Text style={styles.headerTitle}>My Matches</Text>
         <View style={styles.placeholder} />
       </View>
 
-      {/* Filter Tabs */}
-      <View style={styles.filterTabs}>
+      {/* Filter Pills/Chips */}
+      <View style={styles.filterContainer}>
         <TouchableOpacity
-          style={[styles.filterTab, selectedStatus === 'active' && styles.filterTabActive]}
+          style={[styles.filterPill, selectedStatus === 'active' && styles.filterPillActive]}
           onPress={() => setSelectedStatus('active')}
         >
           <Text
             style={[
-              styles.filterTabText,
-              selectedStatus === 'active' && styles.filterTabTextActive,
+              styles.filterPillText,
+              selectedStatus === 'active' && styles.filterPillTextActive,
             ]}
           >
             Upcoming
@@ -255,13 +291,13 @@ export default function ManagerSessionsScreen({
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterTab, selectedStatus === 'completed' && styles.filterTabActive]}
+          style={[styles.filterPill, selectedStatus === 'completed' && styles.filterPillActive]}
           onPress={() => setSelectedStatus('completed')}
         >
           <Text
             style={[
-              styles.filterTabText,
-              selectedStatus === 'completed' && styles.filterTabTextActive,
+              styles.filterPillText,
+              selectedStatus === 'completed' && styles.filterPillTextActive,
             ]}
           >
             Past
@@ -269,13 +305,13 @@ export default function ManagerSessionsScreen({
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterTab, selectedStatus === 'cancelled' && styles.filterTabActive]}
+          style={[styles.filterPill, selectedStatus === 'cancelled' && styles.filterPillActive]}
           onPress={() => setSelectedStatus('cancelled')}
         >
           <Text
             style={[
-              styles.filterTabText,
-              selectedStatus === 'cancelled' && styles.filterTabTextActive,
+              styles.filterPillText,
+              selectedStatus === 'cancelled' && styles.filterPillTextActive,
             ]}
           >
             Cancelled
@@ -302,12 +338,12 @@ export default function ManagerSessionsScreen({
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>📋</Text>
-              <Text style={styles.emptyTitle}>No sessions found</Text>
+              <Text style={styles.emptyIcon}>🎾</Text>
+              <Text style={styles.emptyTitle}>No matches found</Text>
               <Text style={styles.emptyText}>
                 {selectedStatus === 'active'
-                  ? 'Create your first session to get started'
-                  : `No ${selectedStatus} sessions`}
+                  ? 'Create your first match to get started'
+                  : `No ${selectedStatus} matches`}
               </Text>
             </View>
           }
@@ -331,7 +367,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: 'white',
     borderBottomWidth: 1,
@@ -347,159 +383,190 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1A1A1A',
   },
   placeholder: {
     width: 60,
   },
-  filterTabs: {
+  filterContainer: {
     flexDirection: 'row',
     backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
   },
-  filterTab: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#F5F5F5',
-    alignItems: 'center',
+  filterPill: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
   },
-  filterTabActive: {
+  filterPillActive: {
     backgroundColor: '#00D4AA',
   },
-  filterTabText: {
-    fontSize: 13,
+  filterPillText: {
+    fontSize: 14,
     fontWeight: '600',
     color: '#666',
   },
-  filterTabTextActive: {
+  filterPillTextActive: {
     color: 'white',
   },
   listContent: {
     padding: 16,
   },
-  sessionCard: {
+  matchCard: {
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 3,
   },
-  sessionHeader: {
-    marginBottom: 8,
+  matchHeader: {
+    marginBottom: 12,
   },
-  sessionTitleRow: {
+  matchTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  sessionTitle: {
-    fontSize: 18,
+  matchTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1A1A1A',
     flex: 1,
-    marginRight: 8,
+    marginRight: 12,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     textTransform: 'capitalize',
   },
-  sessionPrice: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#00D4AA',
-  },
-  sessionCommunity: {
+  matchCommunity: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 8,
-  },
-  sessionInfo: {
     marginBottom: 12,
+    fontWeight: '500',
   },
-  sessionDate: {
+  matchInfoContainer: {
+    marginBottom: 16,
+    gap: 8,
+  },
+  matchInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  matchInfoIcon: {
+    fontSize: 16,
+    marginRight: 8,
+    width: 24,
+  },
+  matchInfoText: {
     fontSize: 14,
     color: '#333',
-    marginBottom: 4,
+    flex: 1,
   },
-  sessionLocation: {
-    fontSize: 14,
-    color: '#333',
+  matchPriceText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#00D4AA',
   },
   bookingProgress: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   progressHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   progressLabel: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: '#666',
   },
   progressValue: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#00D4AA',
   },
   progressBarContainer: {
-    height: 8,
+    height: 10,
     backgroundColor: '#E0E0E0',
-    borderRadius: 4,
+    borderRadius: 5,
     overflow: 'hidden',
   },
   progressBar: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 5,
+  },
+  actionsColumn: {
+    gap: 12,
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
   },
   viewAttendeesButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     backgroundColor: '#00D4AA',
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
   },
   viewAttendeesButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: 'white',
   },
+  editButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#4ECDC420',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#4ECDC4',
+  },
   cancelButton: {
-    paddingVertical: 12,
+    flex: 1,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     backgroundColor: '#FF6B6B20',
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
   },
   cancelButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: '#FF6B6B',
+  },
+  notifyButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    backgroundColor: '#FF9F4020',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  notifyButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FF9F40',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -511,14 +578,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#666',
     marginBottom: 8,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#999',
     textAlign: 'center',
+    lineHeight: 22,
   },
 });

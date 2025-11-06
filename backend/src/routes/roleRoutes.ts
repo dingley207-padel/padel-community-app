@@ -22,6 +22,15 @@ router.delete('/remove', RoleController.removeRole);
 // Get community managers for a community
 router.get('/community/:communityId/managers', RoleController.getCommunityManagers);
 
+// Assign community manager (owners and super admins only)
+router.post('/community/:communityId/managers', RoleController.assignCommunityManager);
+
+// Revoke community manager (owners and super admins only)
+router.delete('/community/:communityId/managers/:userId', RoleController.revokeCommunityManager);
+
+// Search users to add as managers (owners and super admins only)
+router.get('/community/:communityId/search-users', RoleController.searchUsersForManager);
+
 // Get communities managed by current user
 router.get('/managed-communities', RoleController.getManagedCommunities);
 

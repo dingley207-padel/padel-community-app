@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Alert,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import api from '../services/api';
 
@@ -22,22 +24,38 @@ interface Member {
   activeBookings: number;
   cancelledBookings: number;
   lastBookingDate: string | null;
+  sub_community_id?: string;
+}
+
+interface SubCommunity {
+  id: string;
+  name: string;
+  description?: string;
+  emoji?: string;
 }
 
 interface MembersScreenProps {
+  communityId: string;
   onBack: () => void;
 }
 
-export default function MembersScreen({ onBack }: MembersScreenProps) {
+export default function MembersScreen({ communityId, onBack }: MembersScreenProps) {
   console.log('[MembersScreen] Component mounted/rendered');
   const [members, setMembers] = useState<Member[]>([]);
+  const [subCommunities, setSubCommunities] = useState<SubCommunity[]>([]);
+  const [selectedSubCommunity, setSelectedSubCommunity] = useState<SubCommunity | null>(null);
+  const [showSubCommunitySelector, setShowSubCommunitySelector] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     console.log('[MembersScreen] useEffect running');
-    loadMembers();
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    await Promise.all([loadMembers(), loadSubCommunities()]);
+  };
 
   const loadMembers = async () => {
     try {
@@ -55,10 +73,49 @@ export default function MembersScreen({ onBack }: MembersScreenProps) {
     }
   };
 
+  const loadSubCommunities = async () => {
+    try {
+      console.log('[MembersScreen] Loading sub-communities...');
+      const subComs = await api.getSubCommunities(communityId);
+      console.log('[MembersScreen] Sub-communities:', subComs);
+      setSubCommunities(subComs || []);
+    } catch (error) {
+      console.error('[MembersScreen] Error loading sub-communities:', error);
+    }
+  };
+
   const handleRefresh = () => {
     setIsRefreshing(true);
-    loadMembers();
+    loadData();
   };
+
+  const filteredMembers = selectedSubCommunity
+    ? members.filter((member) => member.sub_community_id === selectedSubCommunity.id)
+    : (() => {
+        // Deduplicate members by user ID for "All Members" view
+        const uniqueMembers = new Map<string, typeof members[0]>();
+        members.forEach((member) => {
+          const existing = uniqueMembers.get(member.id);
+          if (!existing) {
+            uniqueMembers.set(member.id, member);
+          } else {
+            // Aggregate booking stats
+            existing.totalBookings += member.totalBookings;
+            existing.activeBookings += member.activeBookings;
+            existing.cancelledBookings += member.cancelledBookings;
+            // Use the earliest join date
+            if (new Date(member.joinedAt) < new Date(existing.joinedAt)) {
+              existing.joinedAt = member.joinedAt;
+            }
+            // Use the most recent booking date
+            if (member.lastBookingDate && (!existing.lastBookingDate ||
+                new Date(member.lastBookingDate) > new Date(existing.lastBookingDate))) {
+              existing.lastBookingDate = member.lastBookingDate;
+            }
+          }
+        });
+        return Array.from(uniqueMembers.values());
+      })();
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
@@ -123,17 +180,42 @@ export default function MembersScreen({ onBack }: MembersScreenProps) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Compact Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Community Members</Text>
+        <Text style={styles.headerTitle}>Members</Text>
         <View style={styles.placeholder} />
       </View>
 
+      {/* Sub-Community Selector */}
+      {subCommunities.length > 0 && (
+        <View style={styles.filterSection}>
+          <Text style={styles.filterLabel}>Filter by Group</Text>
+          <TouchableOpacity
+            style={styles.subCommunitySelector}
+            onPress={() => setShowSubCommunitySelector(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.selectorLeft}>
+              <Text style={styles.selectorEmoji}>
+                {selectedSubCommunity?.emoji || '👥'}
+              </Text>
+              <Text style={styles.selectorText}>
+                {selectedSubCommunity?.name || 'All Members'}
+              </Text>
+            </View>
+            <Text style={styles.dropdownArrow}>▼</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Member Count */}
       <View style={styles.summaryCard}>
         <Text style={styles.summaryText}>
-          Total Members: <Text style={styles.summaryValue}>{members.length}</Text>
+          {selectedSubCommunity ? 'Group' : 'Total'} Members:{' '}
+          <Text style={styles.summaryValue}>{filteredMembers.length}</Text>
         </Text>
       </View>
 
@@ -143,9 +225,9 @@ export default function MembersScreen({ onBack }: MembersScreenProps) {
         </View>
       ) : (
         <FlatList
-          data={members}
+          data={filteredMembers}
           renderItem={renderMember}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item.id}-${index}`}
           contentContainerStyle={styles.listContainer}
           refreshControl={
             <RefreshControl
@@ -156,14 +238,87 @@ export default function MembersScreen({ onBack }: MembersScreenProps) {
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>👥</Text>
               <Text style={styles.emptyText}>No members found</Text>
               <Text style={styles.emptySubtext}>
-                Members will appear here once they book sessions
+                {selectedSubCommunity
+                  ? `No members in ${selectedSubCommunity.name}`
+                  : 'Members will appear here once they book matches'}
               </Text>
             </View>
           }
         />
       )}
+
+      {/* Sub-Community Selector Modal */}
+      <Modal
+        visible={showSubCommunitySelector}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSubCommunitySelector(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Group</Text>
+              <TouchableOpacity onPress={() => setShowSubCommunitySelector(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalScroll}>
+              {/* All Members Option */}
+              <TouchableOpacity
+                style={[
+                  styles.modalItem,
+                  !selectedSubCommunity && styles.modalItemSelected,
+                ]}
+                onPress={() => {
+                  setSelectedSubCommunity(null);
+                  setShowSubCommunitySelector(false);
+                }}
+              >
+                <View style={styles.modalItemLeft}>
+                  <Text style={styles.modalItemEmoji}>👥</Text>
+                  <Text style={styles.modalItemText}>All Members</Text>
+                </View>
+                {!selectedSubCommunity && (
+                  <Text style={styles.modalItemCheck}>✓</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Sub-Community Options */}
+              {subCommunities.map((subCom) => (
+                <TouchableOpacity
+                  key={subCom.id}
+                  style={[
+                    styles.modalItem,
+                    selectedSubCommunity?.id === subCom.id && styles.modalItemSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedSubCommunity(subCom);
+                    setShowSubCommunitySelector(false);
+                  }}
+                >
+                  <View style={styles.modalItemLeft}>
+                    <Text style={styles.modalItemEmoji}>{subCom.emoji || '📁'}</Text>
+                    <View>
+                      <Text style={styles.modalItemText}>{subCom.name}</Text>
+                      {subCom.description && (
+                        <Text style={styles.modalItemDescription}>
+                          {subCom.description}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  {selectedSubCommunity?.id === subCom.id && (
+                    <Text style={styles.modalItemCheck}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -171,20 +326,22 @@ export default function MembersScreen({ onBack }: MembersScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F5F5F5',
   },
+  // Compact Header - Dashboard Style
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#E9ECEF',
+    borderBottomColor: '#E0E0E0',
   },
   backButton: {
-    padding: 5,
+    paddingVertical: 8,
+    paddingRight: 12,
   },
   backButtonText: {
     fontSize: 16,
@@ -194,110 +351,157 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#212529',
+    color: '#1A1A1A',
   },
   placeholder: {
-    width: 50,
+    width: 60,
   },
-  summaryCard: {
-    backgroundColor: '#FFFFFF',
-    margin: 20,
+  // Sub-Community Filter Section
+  filterSection: {
+    backgroundColor: 'white',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
     marginBottom: 10,
-    padding: 15,
+  },
+  subCommunitySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+  selectorLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  selectorEmoji: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  selectorText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  dropdownArrow: {
+    fontSize: 12,
+    color: '#999',
+    marginLeft: 8,
+  },
+  // Summary Card
+  summaryCard: {
+    backgroundColor: 'white',
+    marginHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 12,
+    padding: 16,
     borderRadius: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   summaryText: {
-    fontSize: 16,
-    color: '#495057',
+    fontSize: 15,
+    color: '#666',
     textAlign: 'center',
   },
   summaryValue: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#00D4AA',
   },
+  // List Container
   listContainer: {
     padding: 20,
-    paddingTop: 10,
+    paddingTop: 8,
   },
+  // Modern Member Cards
   memberCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 3,
   },
   memberHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 16,
   },
   memberAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#00D4AA',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   memberInitial: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: 'white',
   },
   memberInfo: {
     flex: 1,
   },
   memberName: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#212529',
-    marginBottom: 4,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 6,
   },
   memberContact: {
     fontSize: 13,
-    color: '#6C757D',
-    marginTop: 2,
+    color: '#666',
+    marginTop: 3,
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 15,
+    paddingVertical: 16,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#E9ECEF',
+    borderColor: '#F0F0F0',
   },
   statItem: {
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#212529',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1A1A1A',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#6C757D',
+    color: '#666',
+    fontWeight: '500',
   },
   memberFooter: {
-    marginTop: 12,
+    marginTop: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   footerText: {
     fontSize: 12,
-    color: '#6C757D',
+    color: '#666',
   },
   centerContainer: {
     flex: 1,
@@ -305,20 +509,95 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: 16,
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#6C757D',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#666',
     marginBottom: 8,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: '#ADB5BD',
+    fontSize: 15,
+    color: '#999',
     textAlign: 'center',
+    lineHeight: 22,
+  },
+  // Modal Styles - Matching Dashboard
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    paddingBottom: 34,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  modalClose: {
+    fontSize: 28,
+    color: '#999',
+    fontWeight: '300',
+  },
+  modalScroll: {
+    maxHeight: 500,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalItemSelected: {
+    backgroundColor: '#F8F8F8',
+  },
+  modalItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  modalItemEmoji: {
+    fontSize: 28,
+    marginRight: 14,
+  },
+  modalItemText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  modalItemDescription: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 3,
+  },
+  modalItemCheck: {
+    fontSize: 20,
+    color: '#00D4AA',
+    fontWeight: '700',
   },
 });

@@ -18,6 +18,7 @@ interface Community {
   id: string;
   name: string;
   member_count?: number;
+  parent_community_id?: string | null;
 }
 
 interface SendCommunityNotificationScreenProps {
@@ -28,23 +29,34 @@ export default function SendCommunityNotificationScreen({
   onBack,
 }: SendCommunityNotificationScreenProps) {
   const { user } = useAuth();
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [selectedCommunityId, setSelectedCommunityId] = useState<string>('');
+  const [parentCommunity, setParentCommunity] = useState<Community | null>(null);
+  const [subCommunities, setSubCommunities] = useState<Community[]>([]);
+  const [selectedCommunityIds, setSelectedCommunityIds] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
+    console.log('[SendCommunityNotificationScreen] UPDATED VERSION - Using checkbox multi-select');
     loadCommunities();
   }, []);
 
   const loadCommunities = async () => {
     try {
       const response = await api.getManagedCommunities();
-      setCommunities(response.communities || []);
-      if (response.communities?.length > 0) {
-        setSelectedCommunityId(response.communities[0].id);
+      const allCommunities = response.communities || [];
+
+      // Separate parent and sub-communities
+      const parent = allCommunities.find((c: Community) => !c.parent_community_id);
+      const subs = allCommunities.filter((c: Community) => c.parent_community_id);
+
+      setParentCommunity(parent || null);
+      setSubCommunities(subs);
+
+      // Default: select parent community
+      if (parent) {
+        setSelectedCommunityIds([parent.id]);
       }
     } catch (error) {
       console.error('Error loading communities:', error);
@@ -52,6 +64,31 @@ export default function SendCommunityNotificationScreen({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const toggleCommunity = (communityId: string) => {
+    setSelectedCommunityIds((prev) => {
+      if (prev.includes(communityId)) {
+        return prev.filter((id) => id !== communityId);
+      } else {
+        return [...prev, communityId];
+      }
+    });
+  };
+
+  const getTotalMemberCount = () => {
+    let total = 0;
+    selectedCommunityIds.forEach((id) => {
+      if (id === parentCommunity?.id) {
+        total += parentCommunity?.member_count || 0;
+      } else {
+        const subComm = subCommunities.find((s) => s.id === id);
+        if (subComm) {
+          total += subComm.member_count || 0;
+        }
+      }
+    });
+    return total;
   };
 
   const handleSend = async () => {
@@ -65,14 +102,25 @@ export default function SendCommunityNotificationScreen({
       return;
     }
 
-    if (!selectedCommunityId) {
-      Alert.alert('Missing Information', 'Please select a community');
+    if (selectedCommunityIds.length === 0) {
+      Alert.alert('Missing Information', 'Please select at least one community');
       return;
     }
 
+    const memberCount = getTotalMemberCount();
+    const communityNames = selectedCommunityIds
+      .map((id) => {
+        if (id === parentCommunity?.id) return parentCommunity?.name;
+        return subCommunities.find((s) => s.id === id)?.name;
+      })
+      .filter(Boolean)
+      .join(', ');
+
     Alert.alert(
       'Send Notification',
-      `This will send a notification to all members of the selected community. Continue?`,
+      `This will send a notification to ${memberCount} member${
+        memberCount !== 1 ? 's' : ''
+      } in: ${communityNames}. Continue?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -81,14 +129,28 @@ export default function SendCommunityNotificationScreen({
           onPress: async () => {
             setIsSending(true);
             try {
-              await api.sendCommunityNotification(selectedCommunityId, {
+              if (!parentCommunity) {
+                throw new Error('Parent community not found');
+              }
+
+              // Separate parent and sub-community IDs
+              const isParentSelected = selectedCommunityIds.includes(parentCommunity.id);
+              const selectedSubIds = selectedCommunityIds.filter(
+                (id) => id !== parentCommunity.id
+              );
+
+              // Always use parent community ID as the route parameter
+              // Send selected sub-community IDs in the body
+              await api.sendCommunityNotification(parentCommunity.id, {
                 title,
                 message,
+                sub_community_ids: selectedSubIds,
+                include_parent: isParentSelected,
               });
 
               Alert.alert(
                 'Success',
-                'Notification sent to all community members!',
+                'Notification sent successfully!',
                 [{ text: 'OK', onPress: onBack }]
               );
             } catch (error: any) {
@@ -114,7 +176,7 @@ export default function SendCommunityNotificationScreen({
     );
   }
 
-  if (communities.length === 0) {
+  if (!parentCommunity) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
@@ -136,8 +198,6 @@ export default function SendCommunityNotificationScreen({
     );
   }
 
-  const selectedCommunity = communities.find((c) => c.id === selectedCommunityId);
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -151,45 +211,91 @@ export default function SendCommunityNotificationScreen({
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Community Selector */}
         <View style={styles.section}>
-          <Text style={styles.label}>Select Community</Text>
-          <View style={styles.pickerContainer}>
-            {communities.map((community) => (
-              <TouchableOpacity
-                key={community.id}
+          <Text style={styles.label}>Select Communities</Text>
+          <Text style={styles.hint}>Choose which communities will receive this notification</Text>
+
+          {/* Parent Community */}
+          <TouchableOpacity
+            style={[
+              styles.communityOption,
+              selectedCommunityIds.includes(parentCommunity.id) &&
+                styles.communityOptionSelected,
+            ]}
+            onPress={() => toggleCommunity(parentCommunity.id)}
+          >
+            <View style={styles.communityOptionContent}>
+              <Text
                 style={[
-                  styles.communityOption,
-                  selectedCommunityId === community.id && styles.communityOptionSelected,
+                  styles.communityOptionText,
+                  selectedCommunityIds.includes(parentCommunity.id) &&
+                    styles.communityOptionTextSelected,
                 ]}
-                onPress={() => setSelectedCommunityId(community.id)}
               >
-                <View style={styles.communityOptionContent}>
-                  <Text
-                    style={[
-                      styles.communityOptionText,
-                      selectedCommunityId === community.id &&
-                        styles.communityOptionTextSelected,
-                    ]}
-                  >
-                    {community.name}
-                  </Text>
-                  {community.member_count !== undefined && (
+                {parentCommunity.name}
+              </Text>
+              <Text
+                style={[
+                  styles.memberCount,
+                  selectedCommunityIds.includes(parentCommunity.id) &&
+                    styles.memberCountSelected,
+                ]}
+              >
+                {parentCommunity.member_count || 0} member
+                {parentCommunity.member_count !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            {selectedCommunityIds.includes(parentCommunity.id) ? (
+              <Ionicons name="checkbox" size={24} color="#007AFF" />
+            ) : (
+              <Ionicons name="square-outline" size={24} color="#8E8E93" />
+            )}
+          </TouchableOpacity>
+
+          {/* Sub-Communities */}
+          {subCommunities.length > 0 && (
+            <View style={styles.subCommunitiesContainer}>
+              <Text style={styles.subCommunitiesLabel}>Sub-Communities</Text>
+              {subCommunities.map((subComm) => (
+                <TouchableOpacity
+                  key={subComm.id}
+                  style={[
+                    styles.communityOption,
+                    styles.subCommunityOption,
+                    selectedCommunityIds.includes(subComm.id) &&
+                      styles.communityOptionSelected,
+                  ]}
+                  onPress={() => toggleCommunity(subComm.id)}
+                >
+                  <View style={styles.communityOptionContent}>
+                    <Text
+                      style={[
+                        styles.communityOptionText,
+                        selectedCommunityIds.includes(subComm.id) &&
+                          styles.communityOptionTextSelected,
+                      ]}
+                    >
+                      {subComm.name}
+                    </Text>
                     <Text
                       style={[
                         styles.memberCount,
-                        selectedCommunityId === community.id &&
+                        selectedCommunityIds.includes(subComm.id) &&
                           styles.memberCountSelected,
                       ]}
                     >
-                      {community.member_count} member{community.member_count !== 1 ? 's' : ''}
+                      {subComm.member_count || 0} member
+                      {subComm.member_count !== 1 ? 's' : ''}
                     </Text>
+                  </View>
+                  {selectedCommunityIds.includes(subComm.id) ? (
+                    <Ionicons name="checkbox" size={24} color="#007AFF" />
+                  ) : (
+                    <Ionicons name="square-outline" size={24} color="#8E8E93" />
                   )}
-                </View>
-                {selectedCommunityId === community.id && (
-                  <Ionicons name="checkmark-circle" size={24} color="#007AFF" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Notification Title */}
@@ -240,15 +346,16 @@ export default function SendCommunityNotificationScreen({
         )}
 
         {/* Info Box */}
-        <View style={styles.infoBox}>
-          <Ionicons name="information-circle" size={20} color="#007AFF" />
-          <Text style={styles.infoText}>
-            This notification will be sent to all{' '}
-            {selectedCommunity?.member_count || 0} member
-            {selectedCommunity?.member_count !== 1 ? 's' : ''} of{' '}
-            {selectedCommunity?.name}
-          </Text>
-        </View>
+        {selectedCommunityIds.length > 0 && (
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle" size={20} color="#007AFF" />
+            <Text style={styles.infoText}>
+              This notification will be sent to {getTotalMemberCount()} member
+              {getTotalMemberCount() !== 1 ? 's' : ''} across {selectedCommunityIds.length}{' '}
+              selected {selectedCommunityIds.length === 1 ? 'community' : 'communities'}
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
       {/* Send Button */}
@@ -256,10 +363,11 @@ export default function SendCommunityNotificationScreen({
         <TouchableOpacity
           style={[
             styles.sendButton,
-            (!title || !message || isSending) && styles.sendButtonDisabled,
+            (!title || !message || selectedCommunityIds.length === 0 || isSending) &&
+              styles.sendButtonDisabled,
           ]}
           onPress={handleSend}
-          disabled={!title || !message || isSending}
+          disabled={!title || !message || selectedCommunityIds.length === 0 || isSending}
         >
           {isSending ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
@@ -321,8 +429,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     letterSpacing: 0.5,
   },
-  pickerContainer: {
-    gap: 8,
+  hint: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginBottom: 12,
   },
   communityOption: {
     flexDirection: 'row',
@@ -333,6 +443,10 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 2,
     borderColor: '#E5E5EA',
+    marginBottom: 8,
+  },
+  subCommunityOption: {
+    marginLeft: 16,
   },
   communityOptionSelected: {
     borderColor: '#007AFF',
@@ -356,6 +470,18 @@ const styles = StyleSheet.create({
   },
   memberCountSelected: {
     color: '#007AFF',
+  },
+  subCommunitiesContainer: {
+    marginTop: 8,
+  },
+  subCommunitiesLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8E8E93',
+    marginLeft: 16,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   input: {
     backgroundColor: '#FFFFFF',

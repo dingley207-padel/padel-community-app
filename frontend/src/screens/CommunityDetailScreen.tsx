@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Alert,
   Linking,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
@@ -58,21 +59,25 @@ interface CommunityDetailScreenProps {
   showBackButton?: boolean;
   onNavigateToSessions?: () => void;
   onNavigateToAnnouncements?: () => void;
+  onViewCommunity?: (communityId: string) => void;
 }
 
-export default function CommunityDetailScreen({ communityId, onBack, showBackButton = true, onNavigateToSessions, onNavigateToAnnouncements }: CommunityDetailScreenProps) {
+export default function CommunityDetailScreen({ communityId, onBack, showBackButton = true, onNavigateToSessions, onNavigateToAnnouncements, onViewCommunity }: CommunityDetailScreenProps) {
   const [community, setCommunity] = useState<Community | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMember, setIsMember] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [upcomingSessions, setUpcomingSessions] = useState<Session[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [subCommunities, setSubCommunities] = useState<Community[]>([]);
+  const [showSubCommunitiesModal, setShowSubCommunitiesModal] = useState(false);
 
   useEffect(() => {
     loadCommunityDetails();
     checkMembership();
     loadUpcomingSessions();
     loadAnnouncements();
+    loadSubCommunities();
   }, [communityId]);
 
   const loadCommunityDetails = async () => {
@@ -96,6 +101,16 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
       setAnnouncements(announcementsData.slice(0, 3));
     } catch (error) {
       console.error('Load announcements error:', error);
+    }
+  };
+
+  const loadSubCommunities = async () => {
+    try {
+      const subCommunitiesData = await api.getSubCommunities(communityId);
+      // Only load sub-communities if this is a parent community (not a sub-community itself)
+      setSubCommunities(subCommunitiesData);
+    } catch (error) {
+      console.error('Load sub-communities error:', error);
     }
   };
 
@@ -226,7 +241,7 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
   if (isLoading) {
     return (
       <View style={styles.container}>
-        {/* Green Header with Padel ONE */}
+        {/* Green Header */}
         <View style={styles.brandHeader}>
           {/* Back/Close button in top right */}
           {onBack && (
@@ -238,17 +253,6 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
               <Ionicons name="close" size={32} color="#000000" />
             </TouchableOpacity>
           )}
-
-          <View style={styles.appNameRow}>
-            {/* Padel text - black */}
-            <Text style={styles.appName}>Padel </Text>
-
-            {/* Tennis ball replacing 'O' - black */}
-            <Ionicons name="tennisball" size={32} color="#000000" style={styles.ballIcon} />
-
-            {/* NE text - black */}
-            <Text style={styles.appName}>NE</Text>
-          </View>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.brand} />
@@ -261,7 +265,7 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
   if (!community) {
     return (
       <View style={styles.container}>
-        {/* Green Header with Padel ONE */}
+        {/* Green Header */}
         <View style={styles.brandHeader}>
           {/* Back/Close button in top right */}
           {onBack && (
@@ -273,17 +277,6 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
               <Ionicons name="close" size={32} color="#000000" />
             </TouchableOpacity>
           )}
-
-          <View style={styles.appNameRow}>
-            {/* Padel text - black */}
-            <Text style={styles.appName}>Padel </Text>
-
-            {/* Tennis ball replacing 'O' - black */}
-            <Ionicons name="tennisball" size={32} color="#000000" style={styles.ballIcon} />
-
-            {/* NE text - black */}
-            <Text style={styles.appName}>NE</Text>
-          </View>
         </View>
         <View style={styles.loadingContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={Colors.secondary} />
@@ -295,7 +288,7 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
 
   return (
     <View style={styles.container}>
-      {/* Green Header with Padel ONE */}
+      {/* Green Header with Community Logo */}
       <View style={styles.brandHeader}>
         {/* Back/Close button in top right */}
         {onBack && (
@@ -308,20 +301,12 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
           </TouchableOpacity>
         )}
 
-        <View style={styles.appNameRow}>
-          {/* Padel text - black */}
-          <Text style={styles.appName}>Padel </Text>
-
-          {/* Tennis ball replacing 'O' - black */}
-          <Ionicons name="tennisball" size={32} color="#000000" style={styles.ballIcon} />
-
-          {/* NE text - black */}
-          <Text style={styles.appName}>NE</Text>
-        </View>
+        {/* Community Name in Header */}
+        <Text style={styles.headerCommunityName}>{community.name}</Text>
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Banner Image */}
+        {/* Banner Image with Logo */}
         <View style={styles.bannerContainer}>
           {community.banner_image ? (
             <Image
@@ -334,27 +319,25 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
               <Ionicons name="images" size={48} color={Colors.tertiary} />
             </View>
           )}
+
+          {/* Logo in top right of banner */}
+          <View style={styles.bannerLogoContainer}>
+            {community.profile_image ? (
+              <Image
+                source={{ uri: community.profile_image }}
+                style={styles.bannerLogo}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.bannerLogoPlaceholder}>
+                <Ionicons name="people" size={20} color={Colors.secondary} />
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Community Info Card */}
         <View style={styles.infoCard}>
-          {/* Logo */}
-          <View style={styles.logoContainer}>
-            {community.profile_image ? (
-              <Image
-                source={{ uri: community.profile_image }}
-                style={styles.logo}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.logoPlaceholder}>
-                <Ionicons name="people" size={40} color={Colors.secondary} />
-              </View>
-            )}
-          </View>
-
-          {/* Name */}
-          <Text style={styles.communityName}>{community.name}</Text>
 
           {/* Stats Row */}
           <View style={styles.statsRow}>
@@ -435,6 +418,21 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
             </View>
           )}
 
+          {/* Sub-Communities Dropdown - inside info card */}
+          {subCommunities.length > 0 && (
+            <TouchableOpacity
+              style={styles.subCommunitiesDropdownInCard}
+              onPress={() => setShowSubCommunitiesModal(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.dropdownContent}>
+                <Ionicons name="git-branch" size={20} color={Colors.brand} />
+                <Text style={styles.dropdownText}>View Sub-Communities ({subCommunities.length})</Text>
+                <Ionicons name="chevron-down" size={20} color={Colors.textSecondary} />
+              </View>
+            </TouchableOpacity>
+          )}
+
         </View>
 
         {/* Announcements Section */}
@@ -513,7 +511,7 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
           </TouchableOpacity>
         </View>
 
-        {/* Leave Community Button */}
+        {/* Leave Community Button - Discreet */}
         {isMember && (
           <View style={styles.section}>
             <TouchableOpacity
@@ -522,17 +520,97 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
               disabled={isLeaving}
             >
               {isLeaving ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color="#999999" />
               ) : (
-                <>
-                  <Ionicons name="exit-outline" size={20} color="#FFFFFF" />
-                  <Text style={styles.leaveCommunityButtonText}>Leave Community</Text>
-                </>
+                <Text style={styles.leaveCommunityButtonText}>Leave Community</Text>
               )}
             </TouchableOpacity>
           </View>
         )}
       </ScrollView>
+
+      {/* Sub-Communities Modal */}
+      <Modal
+        visible={showSubCommunitiesModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowSubCommunitiesModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSubCommunitiesModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalContainer}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sub-Communities</Text>
+              <TouchableOpacity
+                onPress={() => setShowSubCommunitiesModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={28} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+              {subCommunities.map((subCommunity, index) => (
+                <TouchableOpacity
+                  key={subCommunity.id}
+                  style={[
+                    styles.modalSubCommunityItem,
+                    index === subCommunities.length - 1 && styles.modalSubCommunityItemLast
+                  ]}
+                  onPress={() => {
+                    setShowSubCommunitiesModal(false);
+                    if (onViewCommunity) {
+                      onViewCommunity(subCommunity.id);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  {/* Logo */}
+                  <View style={styles.modalSubCommunityLogoContainer}>
+                    {subCommunity.profile_image ? (
+                      <Image
+                        source={{ uri: subCommunity.profile_image }}
+                        style={styles.modalSubCommunityLogo}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.modalSubCommunityLogoPlaceholder}>
+                        <Ionicons name="people" size={24} color={Colors.secondary} />
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Info */}
+                  <View style={styles.modalSubCommunityInfo}>
+                    <Text style={styles.modalSubCommunityName}>{subCommunity.name}</Text>
+                    {subCommunity.location && (
+                      <View style={styles.modalSubCommunityLocationContainer}>
+                        <Ionicons name="location-outline" size={14} color={Colors.secondary} />
+                        <Text style={styles.modalSubCommunityLocation}>{subCommunity.location}</Text>
+                      </View>
+                    )}
+                    {subCommunity.member_count !== undefined && (
+                      <Text style={styles.modalSubCommunityMembers}>
+                        {subCommunity.member_count} {subCommunity.member_count === 1 ? 'member' : 'members'}
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* Chevron */}
+                  <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -553,6 +631,12 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
     position: 'relative',
+  },
+  headerCommunityName: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#000000',
+    letterSpacing: 0.5,
   },
   closeButton: {
     position: 'absolute',
@@ -601,6 +685,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 200,
     backgroundColor: Colors.backgroundSecondary,
+    position: 'relative',
   },
   bannerImage: {
     width: '100%',
@@ -613,6 +698,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.separatorLight,
   },
+  bannerLogoContainer: {
+    position: 'absolute',
+    top: Spacing.md,
+    left: Spacing.md,
+    width: 75,
+    height: 75,
+    borderRadius: 37.5,
+    backgroundColor: Colors.backgroundElevated,
+    ...Shadows.lg,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  bannerLogo: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 37.5,
+  },
+  bannerLogoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 37.5,
+    backgroundColor: Colors.brandLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   infoCard: {
     backgroundColor: '#F5F5F5',
     marginTop: -40,
@@ -622,35 +732,6 @@ const styles = StyleSheet.create({
     borderColor: '#000000',
     padding: Spacing.md,
     alignItems: 'center',
-  },
-  logoContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginTop: -50,
-    backgroundColor: Colors.backgroundElevated,
-    ...Shadows.lg,
-  },
-  logo: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 50,
-  },
-  logoPlaceholder: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 50,
-    backgroundColor: Colors.brandLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    borderColor: Colors.backgroundElevated,
-  },
-  communityName: {
-    ...TextStyles.title1,
-    marginTop: Spacing.xs,
-    textAlign: 'center',
-    color: '#000000',
   },
   statsRow: {
     flexDirection: 'row',
@@ -830,7 +911,7 @@ const styles = StyleSheet.create({
   socialRow: {
     flexDirection: 'row',
     gap: Spacing.md,
-    marginTop: Spacing.lg,
+    marginTop: Spacing.md,
     justifyContent: 'center',
     flexWrap: 'wrap',
   },
@@ -845,21 +926,217 @@ const styles = StyleSheet.create({
   },
   leaveCommunityButton: {
     flexDirection: 'row',
-    backgroundColor: Colors.red,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.lg,
+    backgroundColor: 'transparent',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.sm,
-    ...Shadows.md,
+    alignSelf: 'center',
   },
   leaveCommunityButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   leaveCommunityButtonText: {
-    ...TextStyles.callout,
-    color: '#FFFFFF',
+    fontSize: 14,
+    color: '#999999',
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+  },
+  subCommunitiesSection: {
+    marginTop: Spacing.md,
+    marginHorizontal: Spacing.md,
+  },
+  subCommunitiesSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  subCommunitiesSectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#000000',
+  },
+  subCommunityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderWidth: 2,
+    borderColor: '#000000',
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  subCommunityLogoContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: Spacing.md,
+  },
+  subCommunityLogo: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
+  },
+  subCommunityLogoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
+    backgroundColor: Colors.brandLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  subCommunityInfo: {
+    flex: 1,
+  },
+  subCommunityName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: Spacing.xs,
+  },
+  subCommunityLocationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  subCommunityLocation: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.secondary,
+  },
+  subCommunityViewButton: {
+    backgroundColor: Colors.brand,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 2,
+    borderColor: '#000000',
+  },
+  subCommunityViewButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  // Sub-Communities Dropdown
+  subCommunitiesSection: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  subCommunitiesDropdown: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: BorderRadius.lg,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    overflow: 'hidden',
+  },
+  dropdownContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  dropdownText: {
+    flex: 1,
+    fontSize: 15,
     fontWeight: '600',
+    color: '#000000',
+  },
+  subCommunitiesDropdownInCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.md,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    overflow: 'hidden',
+    marginTop: Spacing.md,
+    width: '100%',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: BorderRadius.xxl,
+    borderTopRightRadius: BorderRadius.xxl,
+    maxHeight: '80%',
+    ...Shadows.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  modalCloseButton: {
+    padding: Spacing.xs,
+  },
+  modalContent: {
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+  },
+  modalSubCommunityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalSubCommunityItemLast: {
+    borderBottomWidth: 0,
+  },
+  modalSubCommunityLogoContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginRight: Spacing.md,
+  },
+  modalSubCommunityLogo: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 28,
+  },
+  modalSubCommunityLogoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 28,
+    backgroundColor: Colors.brandLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalSubCommunityInfo: {
+    flex: 1,
+  },
+  modalSubCommunityName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+  modalSubCommunityLocationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  modalSubCommunityLocation: {
+    fontSize: 13,
+    color: Colors.secondary,
+  },
+  modalSubCommunityMembers: {
+    fontSize: 12,
+    color: Colors.textSecondary,
   },
 });

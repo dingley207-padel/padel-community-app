@@ -78,7 +78,7 @@ export default function SessionAttendeesScreen({
       setSession(sessionData.session);
     } catch (error) {
       console.error('Error loading attendees:', error);
-      Alert.alert('Error', 'Failed to load session attendees');
+      Alert.alert('Error', 'Failed to load match attendees');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -136,56 +136,55 @@ export default function SessionAttendeesScreen({
   };
 
   const renderBooking = ({ item }: { item: Booking }) => (
-    <View style={styles.bookingCard}>
-      <View style={styles.bookingHeader}>
-        <View style={styles.attendeeIcon}>
-          <Text style={styles.attendeeInitial}>
+    <View style={styles.attendeeCard}>
+      <View style={styles.attendeeHeader}>
+        <View style={styles.avatarContainer}>
+          <Text style={styles.avatarText}>
             {item.users?.name?.charAt(0).toUpperCase() || '?'}
           </Text>
         </View>
         <View style={styles.attendeeInfo}>
           <Text style={styles.attendeeName}>{item.users?.name || 'Unknown'}</Text>
-          <Text style={styles.attendeeContact}>{item.users?.phone}</Text>
-          {item.users?.email && (
-            <Text style={styles.attendeeContact}>{item.users.email}</Text>
-          )}
+          <Text style={styles.attendeePhone}>{item.users?.phone}</Text>
+        </View>
+        <View
+          style={[
+            styles.paymentBadge,
+            { backgroundColor: getPaymentStatusColor(item.payments) + '15' },
+          ]}
+        >
+          <Text
+            style={[
+              styles.paymentText,
+              { color: getPaymentStatusColor(item.payments) },
+            ]}
+          >
+            {getPaymentStatus(item.payments)}
+          </Text>
         </View>
       </View>
 
-      <View style={styles.bookingDetails}>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Booked:</Text>
+      <View style={styles.attendeeDetails}>
+        <View style={styles.detailItem}>
+          <Text style={styles.detailLabel}>Booked</Text>
           <Text style={styles.detailValue}>
             {formatDate(item.booked_at)} at {formatTime(item.booked_at)}
           </Text>
         </View>
 
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Payment:</Text>
-          <View
-            style={[
-              styles.paymentBadge,
-              { backgroundColor: getPaymentStatusColor(item.payments) + '20' },
-            ]}
-          >
-            <Text
-              style={[
-                styles.paymentStatus,
-                { color: getPaymentStatusColor(item.payments) },
-              ]}
-            >
-              {getPaymentStatus(item.payments)}
-              {item.payments && item.payments.length > 0 && item.payments[0].status === 'succeeded'
-                ? ` (AED ${item.payments[0].amount})`
-                : ''}
-            </Text>
+        {item.payments && item.payments.length > 0 && item.payments[0].status === 'succeeded' && (
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Amount</Text>
+            <Text style={styles.detailValue}>AED {item.payments[0].amount}</Text>
           </View>
-        </View>
+        )}
 
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Booking ID:</Text>
-          <Text style={styles.detailValueSmall}>{item.id.slice(0, 8)}...</Text>
-        </View>
+        {item.users?.email && (
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Email</Text>
+            <Text style={styles.detailValue}>{item.users.email}</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -200,63 +199,72 @@ export default function SessionAttendeesScreen({
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Compact Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Attendees
-        </Text>
-        {onSendNotifications && bookings.length > 0 && (
-          <TouchableOpacity
-            onPress={handleSendNotifications}
-            style={styles.notifyButton}
-          >
-            <Text style={styles.notifyButtonText}>📢 Notify</Text>
-          </TouchableOpacity>
-        )}
+        <Text style={styles.headerTitle}>Match Attendees</Text>
+        <View style={styles.headerRight} />
       </View>
 
-      <View style={styles.sessionInfoCard}>
-        <Text style={styles.sessionTitle}>{sessionTitle}</Text>
+      {/* Match Info Card */}
+      <View style={styles.matchInfoCard}>
+        <Text style={styles.matchTitle}>{sessionTitle}</Text>
         {session && (
           <>
-            <Text style={styles.sessionDetail}>
-              📅 {formatDate(session.datetime)} at {formatTime(session.datetime)}
-            </Text>
-            <Text style={styles.sessionDetail}>📍 {session.location}</Text>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
+            <View style={styles.matchDetailsRow}>
+              <Text style={styles.matchDetail}>
+                {formatDate(session.datetime)} at {formatTime(session.datetime)}
+              </Text>
+              <Text style={styles.matchDetailSeparator}>•</Text>
+              <Text style={styles.matchDetail}>{session.location}</Text>
+            </View>
+
+            <View style={styles.statsContainer}>
+              <View style={styles.statBox}>
                 <Text style={styles.statValue}>{bookings.length}</Text>
                 <Text style={styles.statLabel}>Booked</Text>
               </View>
-              <View style={styles.statItem}>
+              <View style={styles.statBox}>
                 <Text style={styles.statValue}>{session.max_players}</Text>
                 <Text style={styles.statLabel}>Capacity</Text>
               </View>
-              <View style={styles.statItem}>
+              <View style={styles.statBox}>
                 <Text style={styles.statValue}>
                   {session.max_players - bookings.length}
                 </Text>
                 <Text style={styles.statLabel}>Available</Text>
               </View>
-              <View style={styles.statItem}>
+              <View style={styles.statBox}>
                 <Text style={styles.statValue}>
-                  AED {bookings.length * session.price}
+                  {bookings.length * session.price}
                 </Text>
-                <Text style={styles.statLabel}>Revenue</Text>
+                <Text style={styles.statLabel}>Revenue (AED)</Text>
               </View>
             </View>
           </>
         )}
       </View>
 
-      <View style={styles.listHeader}>
-        <Text style={styles.listHeaderText}>
+      {/* Large Action Button */}
+      {onSendNotifications && bookings.length > 0 && (
+        <TouchableOpacity
+          onPress={handleSendNotifications}
+          style={styles.notifyButton}
+        >
+          <Text style={styles.notifyButtonText}>Send Notifications to All</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Attendees Section Header */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>
           {bookings.length} {bookings.length === 1 ? 'Attendee' : 'Attendees'}
         </Text>
       </View>
 
+      {/* Attendees List */}
       <FlatList
         data={bookings}
         renderItem={renderBooking}
@@ -272,9 +280,9 @@ export default function SessionAttendeesScreen({
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>👥</Text>
-            <Text style={styles.emptyTitle}>No bookings yet</Text>
+            <Text style={styles.emptyTitle}>No Attendees Yet</Text>
             <Text style={styles.emptyText}>
-              Attendees will appear here once they book this session
+              Attendees will appear here once they book this match
             </Text>
           </View>
         }
@@ -292,20 +300,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F5F5F5',
   },
+
+  // Compact Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
   },
   backButton: {
-    paddingVertical: 8,
-    paddingRight: 12,
+    paddingVertical: 4,
   },
   backButtonText: {
     fontSize: 16,
@@ -313,60 +323,66 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#1A1A1A',
-    flex: 1,
+    position: 'absolute',
+    left: 0,
+    right: 0,
     textAlign: 'center',
+    zIndex: -1,
   },
-  notifyButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#00D4AA',
-    borderRadius: 8,
+  headerRight: {
+    width: 50,
   },
-  notifyButtonText: {
-    fontSize: 13,
-    color: 'white',
-    fontWeight: '600',
-  },
-  sessionInfoCard: {
-    margin: 16,
-    padding: 16,
+
+  // Match Info Card
+  matchInfoCard: {
+    margin: 20,
+    padding: 20,
     backgroundColor: 'white',
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
   },
-  sessionTitle: {
+  matchTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#1A1A1A',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  sessionDetail: {
+  matchDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    flexWrap: 'wrap',
+  },
+  matchDetail: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 4,
   },
-  statsRow: {
+  matchDetailSeparator: {
+    fontSize: 14,
+    color: '#CCC',
+    marginHorizontal: 8,
+  },
+  statsContainer: {
     flexDirection: 'row',
-    marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    gap: 8,
+    borderTopColor: '#F0F0F0',
+    gap: 12,
   },
-  statItem: {
+  statBox: {
     flex: 1,
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#00D4AA',
     marginBottom: 4,
   },
@@ -374,70 +390,108 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#999',
     textAlign: 'center',
+    fontWeight: '500',
   },
-  listHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+
+  // Large Action Button
+  notifyButton: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    paddingVertical: 16,
+    backgroundColor: '#00D4AA',
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#00D4AA',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  listHeaderText: {
+  notifyButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
+    fontWeight: '700',
+    color: 'white',
   },
+
+  // Section Header
+  sectionHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+
+  // List Content
   listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
   },
-  bookingCard: {
+
+  // Modern Attendee Cards
+  attendeeCard: {
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
     elevation: 2,
   },
-  bookingHeader: {
+  attendeeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 12,
+    marginBottom: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#F5F5F5',
   },
-  attendeeIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  avatarContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#00D4AA',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  attendeeInitial: {
-    fontSize: 20,
-    fontWeight: 'bold',
+  avatarText: {
+    fontSize: 22,
+    fontWeight: '700',
     color: 'white',
   },
   attendeeInfo: {
     flex: 1,
   },
   attendeeName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#1A1A1A',
-    marginBottom: 2,
+    marginBottom: 4,
   },
-  attendeeContact: {
-    fontSize: 13,
+  attendeePhone: {
+    fontSize: 14,
     color: '#666',
   },
-  bookingDetails: {
-    gap: 8,
+  paymentBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
-  detailRow: {
+  paymentText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // Attendee Details
+  attendeeDetails: {
+    gap: 12,
+  },
+  detailItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -445,26 +499,17 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 13,
     color: '#999',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   detailValue: {
     fontSize: 13,
     color: '#333',
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
   },
-  detailValueSmall: {
-    fontSize: 11,
-    color: '#666',
-    fontFamily: 'monospace',
-  },
-  paymentBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  paymentStatus: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
+
+  // Empty State
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: 60,
@@ -476,7 +521,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#666',
     marginBottom: 8,
   },
@@ -484,5 +529,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
+    lineHeight: 20,
   },
 });

@@ -160,6 +160,59 @@ class ApiService {
     return response.data;
   }
 
+  async getSubCommunities(communityId: string) {
+    const response = await this.client.get(`/communities/${communityId}/sub-communities`);
+    return response.data.sub_communities || [];
+  }
+
+  async joinCommunityWithSubs(communityId: string, subCommunityIds: string[]) {
+    const response = await this.client.post(`/communities/${communityId}/join-with-subs`, {
+      sub_community_ids: subCommunityIds,
+    });
+    return response.data;
+  }
+
+  async createSubCommunity(communityId: string, data: any) {
+    const response = await this.client.post(`/communities/${communityId}/sub-communities`, data);
+    return response.data;
+  }
+
+  async updateSubCommunity(communityId: string, subCommunityId: string, updates: any) {
+    const url = `/communities/${communityId}/sub-communities/${subCommunityId}`;
+    console.log('[API] Updating sub-community:', { communityId, subCommunityId, updates, url });
+    try {
+      const response = await this.client.put(url, updates);
+      console.log('[API] Update successful:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[API] Update failed:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        error: error.response?.data,
+        url,
+      });
+      throw error;
+    }
+  }
+
+  async deleteSubCommunity(communityId: string, subCommunityId: string) {
+    const url = `/communities/${communityId}/sub-communities/${subCommunityId}`;
+    console.log('[API] Deleting sub-community:', { communityId, subCommunityId, url });
+    try {
+      const response = await this.client.delete(url);
+      console.log('[API] Delete successful:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[API] Delete failed:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        error: error.response?.data,
+        url,
+      });
+      throw error;
+    }
+  }
+
   // Session endpoints
   async getAvailableSessions(communityId?: string) {
     const response = await this.client.get('/sessions/available', {
@@ -289,13 +342,32 @@ class ApiService {
     return response.data;
   }
 
-  async sendCommunityNotification(communityId: string, notification: { title: string; message: string }) {
+  async sendCommunityNotification(communityId: string, notification: { title: string; message: string; sub_community_ids?: string[] }) {
     const response = await this.client.post(`/communities/${communityId}/notifications`, notification);
     return response.data;
   }
 
   async getCommunityManagers(communityId: string) {
     const response = await this.client.get(`/roles/community/${communityId}/managers`);
+    return response.data;
+  }
+
+  async searchUsersForManager(communityId: string, searchTerm: string) {
+    const response = await this.client.get(`/roles/community/${communityId}/search-users`, {
+      params: { search: searchTerm },
+    });
+    return response.data;
+  }
+
+  async assignCommunityManager(communityId: string, userId: string) {
+    const response = await this.client.post(`/roles/community/${communityId}/managers`, {
+      user_id: userId,
+    });
+    return response.data;
+  }
+
+  async revokeCommunityManager(communityId: string, userId: string) {
+    const response = await this.client.delete(`/roles/community/${communityId}/managers/${userId}`);
     return response.data;
   }
 
@@ -396,6 +468,48 @@ class ApiService {
     const response = await this.client.post(`/chat/communities/${communityId}/messages`, {
       content,
     });
+    return response.data;
+  }
+
+  // Session Template endpoints
+  async getSessionTemplates(communityId: string, includeInactive: boolean = false) {
+    const response = await this.client.get(`/session-templates/community/${communityId}`, {
+      params: { include_inactive: includeInactive },
+    });
+    return response.data;
+  }
+
+  async getSessionTemplate(templateId: string) {
+    const response = await this.client.get(`/session-templates/${templateId}`);
+    return response.data;
+  }
+
+  async createSessionTemplate(data: any) {
+    const response = await this.client.post('/session-templates', data);
+    return response.data;
+  }
+
+  async updateSessionTemplate(templateId: string, updates: any) {
+    const response = await this.client.put(`/session-templates/${templateId}`, updates);
+    return response.data;
+  }
+
+  async deleteSessionTemplate(templateId: string) {
+    const response = await this.client.delete(`/session-templates/${templateId}`);
+    return response.data;
+  }
+
+  async bulkCreateSessions(templateIds: string[], weeksAhead: number, startDate?: string) {
+    const response = await this.client.post('/session-templates/bulk-create-sessions', {
+      template_ids: templateIds,
+      weeks_ahead: weeksAhead,
+      start_date: startDate,
+    });
+    return response.data;
+  }
+
+  async sendSessionNotification(sessionId: string, notification: { title: string; message: string }) {
+    const response = await this.client.post(`/sessions/${sessionId}/notifications`, notification);
     return response.data;
   }
 }

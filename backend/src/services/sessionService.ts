@@ -358,29 +358,39 @@ export const getCommunityMembers = async (managerId: string) => {
   const communityIds = communities.map((c) => c.id);
   console.log('[getCommunityMembers] Community IDs:', communityIds);
 
-  // Get all community members with user information
-  const { data: members, error: membersError } = await supabase
+  // Get all community members with user information and community hierarchy
+  const { data: membersRaw, error: membersError} = await supabase
     .from('community_members')
     .select(`
       user_id,
+      community_id,
       joined_at,
-      
+      sub_community_id,
       users (
         id,
         name,
         email,
         phone,
         created_at
+      ),
+      communities (
+        id,
+        parent_community_id
       )
     `)
     .in('community_id', communityIds);
 
-  console.log('[getCommunityMembers] Community members:', members?.length || 0, 'Error:', membersError);
+  console.log('[getCommunityMembers] Community members (raw):', membersRaw?.length || 0, 'Error:', membersError);
 
-  if (!members || members.length === 0) {
+  if (!membersRaw || membersRaw.length === 0) {
     console.log('[getCommunityMembers] No members found');
     return [];
   }
+
+  // Don't deduplicate - we want to keep all memberships including sub-communities
+  // so the frontend can filter by sub-community
+  const members = membersRaw;
+  console.log('[getCommunityMembers] Total member records (including sub-communities):', members.length);
 
   // Get all sessions for these communities (for booking stats)
   const { data: sessions } = await supabase
@@ -433,6 +443,11 @@ export const getCommunityMembers = async (managerId: string) => {
       lastBookingDate: null,
     };
 
+    // If the community has a parent_community_id, it's a sub-community
+    // In that case, set sub_community_id to the community_id
+    const isSubCommunity = member.communities?.parent_community_id !== null;
+    const subCommunityId = isSubCommunity ? member.community_id : null;
+
     return {
       id: user.id,
       name: user.name,
@@ -444,9 +459,92 @@ export const getCommunityMembers = async (managerId: string) => {
       activeBookings: stats.activeBookings,
       cancelledBookings: stats.cancelledBookings,
       lastBookingDate: stats.lastBookingDate,
+      sub_community_id: subCommunityId,
     };
   });
 
   console.log('[getCommunityMembers] Returning members:', result.length);
   return result;
+};
+
+export const sendSessionNotification = async (
+  sessionId: string,
+  title: string,
+  message: string,
+  managerId: string
+) => {
+  console.log(`[sendSessionNotification] Sending notification for session ${sessionId}`);
+
+  // Get session to verify manager has access
+  const { data: session, error: sessionError } = await supabase
+    .from('sessions')
+    .select('*, communities!inner(id, name)')
+    .eq('id', sessionId)
+    .single();
+
+  if (sessionError || !session) {
+    throw new Error('Session not found');
+  }
+
+  // Verify user can manage this community
+  const { RoleService } = await import('./roleService');
+  const canManage = await RoleService.canManageCommunity(managerId, session.community_id);
+
+  if (!canManage) {
+    throw new Error('You do not have permission to send notifications for this session');
+  }
+
+  // Get all confirmed bookings for this session
+  const { data: bookings, error: bookingsError } = await supabase
+    .from('bookings')
+    .select(`
+      user_id,
+      users!inner(id, name, push_token)
+    `)
+    .eq('session_id', sessionId)
+    .eq('payment_status', 'completed');
+
+  if (bookingsError) {
+    console.error('[sendSessionNotification] Error fetching bookings:', bookingsError);
+    throw new Error('Failed to fetch session attendees');
+  }
+
+  if (!bookings || bookings.length === 0) {
+    console.log('[sendSessionNotification] No attendees found for this session');
+    return {
+      sent: 0,
+      failed: 0,
+      message: 'No attendees to notify',
+    };
+  }
+
+  console.log(`[sendSessionNotification] Found ${bookings.length} attendees`);
+
+  // Get unique user IDs
+  const userIds = [...new Set(bookings.map(b => b.user_id))];
+
+  console.log(`[sendSessionNotification] Sending to ${userIds.length} users`);
+
+  // Send push notifications
+  let sentCount = 0;
+  let failedCount = 0;
+
+  if (userIds.length > 0) {
+    const { sendNotificationToMultipleUsers } = await import('./notificationService');
+    const results = await sendNotificationToMultipleUsers(userIds, title, message, {
+      type: 'session_notification',
+      sessionId,
+    });
+
+    sentCount = results.sent;
+    failedCount = results.failed;
+
+    console.log(`[sendSessionNotification] Sent ${sentCount} notifications, ${failedCount} failed`);
+  }
+
+  return {
+    sent: sentCount,
+    failed: failedCount,
+    totalAttendees: userIds.length,
+  };
 };

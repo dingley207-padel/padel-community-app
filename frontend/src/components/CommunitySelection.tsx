@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import api from '../services/api';
+import SubCommunitySelectionModal from './SubCommunitySelectionModal';
 
 interface Community {
   id: string;
@@ -30,6 +31,9 @@ export default function CommunitySelection({ onComplete, onSkip }: CommunitySele
   const [selectedCommunities, setSelectedCommunities] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
+  const [showSubCommunityModal, setShowSubCommunityModal] = useState(false);
+  const [selectedCommunityForModal, setSelectedCommunityForModal] = useState<Community | null>(null);
+  const [communitiesWithSubs, setCommunitiesWithSubs] = useState<Map<string, string[]>>(new Map());
 
   useEffect(() => {
     loadCommunities();
@@ -46,7 +50,9 @@ export default function CommunitySelection({ onComplete, onSkip }: CommunitySele
       console.log('[CommunitySelection] Communities data:', communitiesData);
 
       if (Array.isArray(communitiesData)) {
-        setCommunities(communitiesData);
+        // Filter out sub-communities - only show parent communities
+        const parentCommunitiesOnly = communitiesData.filter((c: any) => !c.parent_community_id);
+        setCommunities(parentCommunitiesOnly);
       } else {
         console.error('[CommunitySelection] Invalid communities data structure:', communitiesData);
         Alert.alert('Error', 'Invalid data format received');
@@ -80,8 +86,40 @@ export default function CommunitySelection({ onComplete, onSkip }: CommunitySele
 
     setIsJoining(true);
     try {
-      // Join all selected communities
-      const joinPromises = Array.from(selectedCommunities).map((communityId) =>
+      const selectedArray = Array.from(selectedCommunities);
+
+      // Check if any selected communities have sub-communities
+      let hasSubCommunities = false;
+      for (const communityId of selectedArray) {
+        try {
+          const subCommResponse = await api.getSubCommunities(communityId);
+          const subs = subCommResponse.sub_communities || [];
+          if (subs.length > 0) {
+            hasSubCommunities = true;
+            communitiesWithSubs.set(communityId, subs.map((s: any) => s.id));
+          }
+        } catch (error) {
+          console.error('[CommunitySelection] Error checking subs:', error);
+        }
+      }
+
+      if (hasSubCommunities) {
+        // For now, join first community with subs and show modal
+        // In future, could batch process multiple communities with subs
+        const firstCommunityWithSubs = selectedArray.find(id => communitiesWithSubs.has(id));
+        if (firstCommunityWithSubs) {
+          const community = communities.find(c => c.id === firstCommunityWithSubs);
+          if (community) {
+            setSelectedCommunityForModal(community);
+            setShowSubCommunityModal(true);
+            setIsJoining(false);
+            return;
+          }
+        }
+      }
+
+      // No sub-communities, join all normally
+      const joinPromises = selectedArray.map((communityId) =>
         api.joinCommunity(communityId)
       );
 
@@ -100,6 +138,18 @@ export default function CommunitySelection({ onComplete, onSkip }: CommunitySele
     } finally {
       setIsJoining(false);
     }
+  };
+
+  const handleModalComplete = () => {
+    setShowSubCommunityModal(false);
+    setSelectedCommunityForModal(null);
+    onComplete();
+  };
+
+  const handleModalSkip = () => {
+    setShowSubCommunityModal(false);
+    setSelectedCommunityForModal(null);
+    onComplete();
   };
 
   const renderCommunityItem = ({ item }: { item: Community }) => {
@@ -188,6 +238,17 @@ export default function CommunitySelection({ onComplete, onSkip }: CommunitySele
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Sub-Community Selection Modal */}
+      {selectedCommunityForModal && (
+        <SubCommunitySelectionModal
+          visible={showSubCommunityModal}
+          parentCommunityId={selectedCommunityForModal.id}
+          parentCommunityName={selectedCommunityForModal.name}
+          onComplete={handleModalComplete}
+          onSkip={handleModalSkip}
+        />
+      )}
     </View>
   );
 }

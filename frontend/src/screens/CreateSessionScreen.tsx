@@ -10,12 +10,21 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Switch,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
+import { Colors, Spacing, Typography } from '../styles/appleDesignSystem';
 
 interface Community {
+  id: string;
+  name: string;
+  location?: string;
+}
+
+interface SubCommunity {
   id: string;
   name: string;
   location?: string;
@@ -31,9 +40,12 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
   const [isLoading, setIsLoading] = useState(false);
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loadingCommunities, setLoadingCommunities] = useState(true);
+  const [subCommunities, setSubCommunities] = useState<SubCommunity[]>([]);
+  const [loadingSubCommunities, setLoadingSubCommunities] = useState(false);
 
   // Form state
   const [selectedCommunity, setSelectedCommunity] = useState<string>('');
+  const [selectedSubCommunity, setSelectedSubCommunity] = useState<string>('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
@@ -41,16 +53,17 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [duration, setDuration] = useState('90');
   const [price, setPrice] = useState('');
   const [maxPlayers, setMaxPlayers] = useState('');
   const [freeCancellationHours, setFreeCancellationHours] = useState('24');
   const [allowConditionalCancellation, setAllowConditionalCancellation] = useState(true);
 
   useEffect(() => {
-    loadCommunities();
+    loadCommunitiesAndSubCommunities();
   }, []);
 
-  const loadCommunities = async () => {
+  const loadCommunitiesAndSubCommunities = async () => {
     try {
       const response = await api.getManagedCommunities();
       const managedCommunities = response.communities || [];
@@ -58,13 +71,29 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
 
       // Auto-select first community if only one
       if (managedCommunities.length === 1) {
-        setSelectedCommunity(managedCommunities[0].id);
+        const communityId = managedCommunities[0].id;
+        setSelectedCommunity(communityId);
+        // Load sub-communities for the auto-selected community
+        loadSubCommunities(communityId);
       }
     } catch (error) {
       console.error('Error loading communities:', error);
       Alert.alert('Error', 'Failed to load communities');
     } finally {
       setLoadingCommunities(false);
+    }
+  };
+
+  const loadSubCommunities = async (communityId: string) => {
+    try {
+      setLoadingSubCommunities(true);
+      const subComms = await api.getSubCommunities(communityId);
+      setSubCommunities(subComms);
+    } catch (error) {
+      console.error('Error loading sub-communities:', error);
+      setSubCommunities([]);
+    } finally {
+      setLoadingSubCommunities(false);
     }
   };
 
@@ -86,16 +115,12 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
   };
 
   const validateForm = (): boolean => {
-    if (!selectedCommunity) {
-      Alert.alert('Validation Error', 'Please select a community');
-      return false;
-    }
     if (!title.trim()) {
-      Alert.alert('Validation Error', 'Please enter a session title');
+      Alert.alert('Validation Error', 'Please enter a match title');
       return false;
     }
-    if (!location.trim()) {
-      Alert.alert('Validation Error', 'Please enter a location');
+    if (!selectedSubCommunity && !location.trim()) {
+      Alert.alert('Validation Error', 'Please select a sub-community or enter a location');
       return false;
     }
     if (!price || parseFloat(price) < 0) {
@@ -106,6 +131,10 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
       Alert.alert('Validation Error', 'Please enter a valid number of players (minimum 1)');
       return false;
     }
+    if (!selectedCommunity) {
+      Alert.alert('Error', 'No community found. Please contact support.');
+      return false;
+    }
     return true;
   };
 
@@ -114,12 +143,20 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
 
     setIsLoading(true);
     try {
+      // Get location from selected sub-community or manual input
+      const selectedSubComm = subCommunities.find(sc => sc.id === selectedSubCommunity);
+      const finalLocation = selectedSubComm
+        ? (selectedSubComm.location || selectedSubComm.name)
+        : location.trim();
+
       await api.createSession({
         community_id: selectedCommunity,
+        sub_community_id: selectedSubCommunity || undefined,
         title: title.trim(),
         description: description.trim(),
         datetime: date.toISOString(),
-        location: location.trim(),
+        duration_minutes: parseInt(duration) || 90,
+        location: finalLocation,
         google_maps_url: googleMapsUrl.trim() || undefined,
         price: parseFloat(price),
         max_players: parseInt(maxPlayers),
@@ -130,7 +167,7 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
 
       Alert.alert(
         'Success!',
-        'Session created successfully',
+        'Match created successfully',
         [
           {
             text: 'OK',
@@ -141,10 +178,10 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
         ]
       );
     } catch (error: any) {
-      console.error('Error creating session:', error);
+      console.error('Error creating match:', error);
       Alert.alert(
         'Error',
-        error.response?.data?.error || 'Failed to create session. Please try again.'
+        error.response?.data?.error || 'Failed to create match. Please try again.'
       );
     } finally {
       setIsLoading(false);
@@ -180,16 +217,16 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>← Back</Text>
+            <Ionicons name="close" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Session</Text>
+          <Text style={styles.headerTitle}>Create Match</Text>
           <View style={styles.placeholder} />
         </View>
-        <View style={styles.emptyState}>
+        <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>🏘️</Text>
-          <Text style={styles.emptyTitle}>No Communities</Text>
-          <Text style={styles.emptyDescription}>
-            You need to be assigned to a community to create sessions.
+          <Text style={styles.emptyText}>No Communities</Text>
+          <Text style={styles.emptySubtext}>
+            You need to be assigned to a community to create matches.
           </Text>
         </View>
       </SafeAreaView>
@@ -200,41 +237,19 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Ionicons name="close" size={24} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create Session</Text>
+        <Text style={styles.headerTitle}>Create Match</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        {/* Community Selection */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Community *</Text>
-          {communities.map((community) => (
-            <TouchableOpacity
-              key={community.id}
-              style={[
-                styles.communityOption,
-                selectedCommunity === community.id && styles.communityOptionSelected,
-              ]}
-              onPress={() => setSelectedCommunity(community.id)}
-            >
-              <View style={styles.radioButton}>
-                {selectedCommunity === community.id && <View style={styles.radioButtonInner} />}
-              </View>
-              <View style={styles.communityInfo}>
-                <Text style={styles.communityName}>{community.name}</Text>
-                {community.location && (
-                  <Text style={styles.communityLocation}>📍 {community.location}</Text>
-                )}
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* Match Details Section */}
+        <Text style={styles.sectionHeader}>Match Details</Text>
 
-        {/* Session Details */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Session Title *</Text>
+        {/* Title */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Match Title *</Text>
           <TextInput
             style={styles.input}
             value={title}
@@ -244,40 +259,124 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
           />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Description</Text>
+        {/* Description */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Description (Optional)</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             value={description}
             onChangeText={setDescription}
-            placeholder="Add session details..."
+            placeholder="Additional details about this match..."
             placeholderTextColor="#999"
             multiline
-            numberOfLines={4}
+            numberOfLines={3}
+            textAlignVertical="top"
           />
         </View>
 
+        {/* Location Section */}
+        <Text style={styles.sectionHeader}>Location</Text>
+
+        {/* Location (Sub-Community) */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Match Location *</Text>
+
+          {loadingSubCommunities ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#00D4AA" />
+              <Text style={styles.loadingText}>Loading locations...</Text>
+            </View>
+          ) : subCommunities.length > 0 ? (
+            <>
+              <View style={styles.pickerContainer}>
+                {subCommunities.map((subComm) => (
+                  <TouchableOpacity
+                    key={subComm.id}
+                    style={[
+                      styles.pickerOption,
+                      selectedSubCommunity === subComm.id && styles.pickerOptionSelected,
+                    ]}
+                    onPress={() => {
+                      setSelectedSubCommunity(subComm.id);
+                      setLocation(''); // Clear manual location when selecting sub-community
+                    }}
+                  >
+                    <Text style={[
+                      styles.pickerOptionText,
+                      selectedSubCommunity === subComm.id && styles.pickerOptionTextSelected
+                    ]}>
+                      {subComm.name}
+                    </Text>
+                    {subComm.location && (
+                      <Text style={styles.pickerOptionSubtext}>{subComm.location}</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.orDivider}>or enter custom location</Text>
+              <TextInput
+                style={styles.input}
+                value={location}
+                onChangeText={(text) => {
+                  setLocation(text);
+                  if (text.trim()) {
+                    setSelectedSubCommunity(''); // Clear sub-community selection when typing
+                  }
+                }}
+                placeholder="e.g., JGE Courts"
+                placeholderTextColor="#999"
+                editable={!selectedSubCommunity}
+              />
+            </>
+          ) : (
+            <TextInput
+              style={styles.input}
+              value={location}
+              onChangeText={setLocation}
+              placeholder="e.g., JGE Courts"
+              placeholderTextColor="#999"
+            />
+          )}
+        </View>
+
+        {/* Schedule Section */}
+        <Text style={styles.sectionHeader}>Schedule</Text>
+
         {/* Date & Time */}
         <View style={styles.row}>
-          <View style={[styles.section, styles.halfWidth]}>
-            <Text style={styles.label}>Date *</Text>
+          <View style={[styles.inputGroup, styles.halfWidth]}>
+            <Text style={styles.inputLabel}>Date *</Text>
             <TouchableOpacity
-              style={styles.dateTimeButton}
+              style={styles.input}
               onPress={() => setShowDatePicker(true)}
             >
               <Text style={styles.dateTimeText}>{formatDate(date)}</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={[styles.section, styles.halfWidth]}>
-            <Text style={styles.label}>Time *</Text>
+          <View style={[styles.inputGroup, styles.halfWidth]}>
+            <Text style={styles.inputLabel}>Time *</Text>
             <TouchableOpacity
-              style={styles.dateTimeButton}
+              style={styles.input}
               onPress={() => setShowTimePicker(true)}
             >
               <Text style={styles.dateTimeText}>{formatTime(date)}</Text>
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* Duration */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Duration (minutes)</Text>
+          <TextInput
+            style={styles.input}
+            value={duration}
+            onChangeText={setDuration}
+            placeholder="90"
+            placeholderTextColor="#999"
+            keyboardType="numeric"
+          />
         </View>
 
         {showDatePicker && (
@@ -299,72 +398,42 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
           />
         )}
 
-        {/* Location */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Location *</Text>
-          <TextInput
-            style={styles.input}
-            value={location}
-            onChangeText={setLocation}
-            placeholder="e.g., JGE Courts"
-            placeholderTextColor="#999"
-          />
-        </View>
-
-        {/* Google Maps URL */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Google Maps Link (Optional)</Text>
-          <TextInput
-            style={styles.input}
-            value={googleMapsUrl}
-            onChangeText={setGoogleMapsUrl}
-            placeholder="https://maps.google.com/?q=..."
-            placeholderTextColor="#999"
-            keyboardType="url"
-            autoCapitalize="none"
-          />
-          <Text style={styles.helperText}>
-            Members can tap the location to get directions
-          </Text>
-        </View>
+        {/* Match Settings Section */}
+        <Text style={styles.sectionHeader}>Match Settings</Text>
 
         {/* Price & Max Players */}
         <View style={styles.row}>
-          <View style={[styles.section, styles.halfWidth]}>
-            <Text style={styles.label}>Price (AED) *</Text>
+          <View style={[styles.inputGroup, styles.halfWidth]}>
+            <Text style={styles.inputLabel}>Price (AED) *</Text>
             <TextInput
               style={styles.input}
               value={price}
               onChangeText={setPrice}
-              placeholder="0"
+              placeholder="50"
               placeholderTextColor="#999"
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
             />
           </View>
 
-          <View style={[styles.section, styles.halfWidth]}>
-            <Text style={styles.label}>Max Players *</Text>
+          <View style={[styles.inputGroup, styles.halfWidth]}>
+            <Text style={styles.inputLabel}>Max Players *</Text>
             <TextInput
               style={styles.input}
               value={maxPlayers}
               onChangeText={setMaxPlayers}
-              placeholder="12"
+              placeholder="8"
               placeholderTextColor="#999"
               keyboardType="numeric"
             />
           </View>
         </View>
 
-        {/* Cancellation Policy */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cancellation Policy</Text>
-          <Text style={styles.sectionDescription}>
-            Configure how members can cancel their bookings
-          </Text>
-        </View>
+        {/* Cancellation Policy Section */}
+        <Text style={styles.sectionHeader}>Cancellation Policy</Text>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Free Cancellation Window (hours before session) *</Text>
+        {/* Cancellation Policy */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Free Cancellation Period (hours)</Text>
           <TextInput
             style={styles.input}
             value={freeCancellationHours}
@@ -373,26 +442,19 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
             placeholderTextColor="#999"
             keyboardType="numeric"
           />
-          <Text style={styles.helpText}>
-            Members can cancel and get a full refund up to this many hours before the session
-          </Text>
         </View>
 
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={styles.checkboxContainer}
-            onPress={() => setAllowConditionalCancellation(!allowConditionalCancellation)}
-          >
-            <View style={styles.checkbox}>
-              {allowConditionalCancellation && <View style={styles.checkboxInner} />}
-            </View>
-            <View style={styles.checkboxTextContainer}>
-              <Text style={styles.checkboxLabel}>Allow Conditional Cancellation</Text>
-              <Text style={styles.checkboxDescription}>
-                After free cancellation window, members can request cancellation and get refunded only if someone else takes their spot
-              </Text>
-            </View>
-          </TouchableOpacity>
+        <View style={styles.switchRow}>
+          <View style={styles.switchLabelContainer}>
+            <Text style={styles.switchLabel}>Allow Conditional Cancellation</Text>
+            <Text style={styles.switchSubtext}>Players can cancel if a replacement is found</Text>
+          </View>
+          <Switch
+            value={allowConditionalCancellation}
+            onValueChange={setAllowConditionalCancellation}
+            trackColor={{ false: '#D1D1D6', true: '#00D4AA' }}
+            thumbColor="#FFFFFF"
+          />
         </View>
 
         {/* Create Button */}
@@ -402,9 +464,9 @@ export default function CreateSessionScreen({ onBack, onSessionCreated }: Create
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color="white" />
+            <ActivityIndicator color="#000000" />
           ) : (
-            <Text style={styles.createButtonText}>Create Session</Text>
+            <Text style={styles.createButtonText}>Create Match</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -421,103 +483,121 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F5F5F5',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: 'white',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#000000',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: '#1C1C1E',
   },
   backButton: {
-    paddingVertical: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#00D4AA',
-    fontWeight: '600',
+    padding: 4,
+    width: 44,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    flex: 1,
   },
   placeholder: {
-    width: 60,
+    width: 44,
   },
   content: {
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 20,
     paddingBottom: 40,
   },
-  section: {
-    marginBottom: 20,
-  },
-  label: {
+  sectionHeader: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: '#000000',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
     marginBottom: 8,
   },
   input: {
-    backgroundColor: 'white',
+    fontSize: 16,
+    fontWeight: '400',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
     borderRadius: 12,
     padding: 16,
-    fontSize: 16,
+    backgroundColor: '#FFFFFF',
+    color: '#000000',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E0E0E0',
   },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
+  loadingText: {
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#666',
   },
-  communityOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
+  pickerContainer: {
+    gap: 12,
+    marginBottom: 12,
+  },
+  pickerOption: {
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
+    backgroundColor: '#FFFFFF',
   },
-  communityOptionSelected: {
+  pickerOptionSelected: {
     borderColor: '#00D4AA',
-    backgroundColor: '#F0FFF9',
+    backgroundColor: '#E6FAF6',
   },
-  radioButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+  pickerOptionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000000',
   },
-  radioButtonInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#00D4AA',
-  },
-  communityInfo: {
-    flex: 1,
-  },
-  communityName: {
+  pickerOptionTextSelected: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1A1A1A',
-    marginBottom: 2,
+    color: '#00D4AA',
   },
-  communityLocation: {
+  pickerOptionSubtext: {
     fontSize: 13,
+    fontWeight: '400',
     color: '#666',
+    marginTop: 4,
+  },
+  orDivider: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#999',
+    marginVertical: 12,
+    textAlign: 'center',
+  },
+  textArea: {
+    minHeight: 100,
+    paddingTop: 16,
   },
   row: {
     flexDirection: 'row',
@@ -526,116 +606,70 @@ const styles = StyleSheet.create({
   halfWidth: {
     flex: 1,
   },
-  dateTimeButton: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
   dateTimeText: {
     fontSize: 16,
-    color: '#1A1A1A',
+    fontWeight: '400',
+    color: '#000000',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  switchLabelContainer: {
+    flex: 1,
+    marginRight: 16,
+  },
+  switchLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  switchSubtext: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#666',
   },
   createButton: {
     backgroundColor: '#00D4AA',
     borderRadius: 12,
-    padding: 18,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginTop: 32,
+    marginBottom: 20,
   },
   createButtonDisabled: {
-    backgroundColor: '#CCC',
+    opacity: 0.5,
   },
   createButtonText: {
-    color: 'white',
     fontSize: 18,
-    fontWeight: 'bold',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-    marginBottom: 4,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    color: '#666',
-  },
-  helpText: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 6,
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 6,
-  },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  checkboxInner: {
-    width: 14,
-    height: 14,
-    borderRadius: 3,
-    backgroundColor: '#00D4AA',
-  },
-  checkboxTextContainer: {
-    flex: 1,
-  },
-  checkboxLabel: {
-    fontSize: 16,
     fontWeight: '600',
-    color: '#1A1A1A',
-    marginBottom: 4,
+    color: '#000000',
   },
-  checkboxDescription: {
-    fontSize: 13,
-    color: '#666',
-    lineHeight: 18,
-  },
-  emptyState: {
+  emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 40,
   },
   emptyIcon: {
     fontSize: 64,
     marginBottom: 16,
   },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
+  emptyText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#000000',
     marginBottom: 8,
   },
-  emptyDescription: {
+  emptySubtext: {
     fontSize: 16,
-    color: '#999',
+    fontWeight: '400',
+    color: '#666',
     textAlign: 'center',
+    lineHeight: 22,
   },
 });

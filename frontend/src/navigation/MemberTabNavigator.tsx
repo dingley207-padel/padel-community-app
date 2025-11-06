@@ -151,6 +151,7 @@ function CommunitiesStack({ isSuperAdmin, onOpenMenu }: { isSuperAdmin: boolean;
             communityId={route.params.communityId}
             onBack={() => navigation.goBack()}
             showBackButton={true}
+            onViewCommunity={(communityId) => navigation.push('CommunityDetail', { communityId })}
             onNavigateToSessions={() => {
               // Navigate to MyBookings tab, then to Sessions screen with communityId
               const rootNavigation = navigation.getParent();

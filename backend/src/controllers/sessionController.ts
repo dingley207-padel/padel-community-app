@@ -205,3 +205,31 @@ export const getCommunityMembersHandler = async (
     res.status(500).json({ error: error.message || 'Failed to fetch members' });
   }
 };
+
+export const sendSessionNotificationHandler = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { id: sessionId } = req.params;
+    const { title, message } = req.body;
+
+    // Import here to avoid circular dependency
+    const { sendSessionNotification } = await import('../services/sessionService');
+
+    const result = await sendSessionNotification(sessionId, title, message, req.user.id);
+
+    res.status(200).json({
+      message: 'Notification sent successfully',
+      ...result,
+    });
+  } catch (error: any) {
+    console.error('Send session notification error:', error);
+    res.status(400).json({ error: error.message || 'Failed to send notification' });
+  }
+};
