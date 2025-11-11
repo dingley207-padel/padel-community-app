@@ -77,15 +77,23 @@ const sendWhatsAppOTP = async (phone: string, code: string): Promise<void> => {
   try {
     const formattedPhone = formatPhoneForWhatsApp(phone);
     const fromNumber = process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886';
+    const contentSid = process.env.TWILIO_CONTENT_SID;
 
-    // Using Twilio Messaging API for WhatsApp Sandbox
+    if (!contentSid) {
+      throw new Error('TWILIO_CONTENT_SID not configured');
+    }
+
+    // Using Twilio Content API with approved WhatsApp template
     await twilioClient.messages.create({
       from: fromNumber,
       to: `whatsapp:${formattedPhone}`,
-      body: `Your Padel Community verification code is: ${code}\n\nThis code will expire in ${OTP_EXPIRY_MINUTES} minutes.`,
+      contentSid: contentSid,
+      contentVariables: JSON.stringify({
+        1: code
+      })
     });
 
-    console.log(`WhatsApp OTP sent successfully to ${phone}`);
+    console.log(`WhatsApp OTP sent successfully to ${phone} using approved template`);
   } catch (error) {
     console.error('WhatsApp OTP error:', error);
     throw new Error('Failed to send WhatsApp OTP');
