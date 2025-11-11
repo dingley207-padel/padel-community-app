@@ -232,6 +232,7 @@ export default function AuthScreen({ initialStep = 'choice' }: AuthScreenProps =
         <TextInput
           style={styles.input}
           placeholder="Full Name"
+          placeholderTextColor="#999999"
           value={name}
           onChangeText={setName}
           autoCapitalize="words"
@@ -240,6 +241,7 @@ export default function AuthScreen({ initialStep = 'choice' }: AuthScreenProps =
         <TextInput
           style={styles.input}
           placeholder="Email"
+          placeholderTextColor="#999999"
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -250,6 +252,7 @@ export default function AuthScreen({ initialStep = 'choice' }: AuthScreenProps =
         <TextInput
           style={styles.input}
           placeholder="Phone Number (+1234567890)"
+          placeholderTextColor="#999999"
           value={phone}
           onChangeText={setPhone}
           keyboardType="phone-pad"
@@ -258,6 +261,7 @@ export default function AuthScreen({ initialStep = 'choice' }: AuthScreenProps =
         <TextInput
           style={styles.input}
           placeholder="Password"
+          placeholderTextColor="#999999"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
@@ -267,6 +271,7 @@ export default function AuthScreen({ initialStep = 'choice' }: AuthScreenProps =
         <TextInput
           style={styles.input}
           placeholder="Confirm Password"
+          placeholderTextColor="#999999"
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           secureTextEntry
@@ -302,6 +307,7 @@ export default function AuthScreen({ initialStep = 'choice' }: AuthScreenProps =
       <TextInput
         style={[styles.input, styles.otpInput]}
         placeholder="000000"
+        placeholderTextColor="#999999"
         value={otp}
         onChangeText={setOtp}
         keyboardType="number-pad"
@@ -349,6 +355,7 @@ export default function AuthScreen({ initialStep = 'choice' }: AuthScreenProps =
       <TextInput
         style={styles.input}
         placeholder="Email or Phone Number"
+        placeholderTextColor="#999999"
         value={loginIdentifier}
         onChangeText={setLoginIdentifier}
         autoCapitalize="none"
@@ -358,6 +365,7 @@ export default function AuthScreen({ initialStep = 'choice' }: AuthScreenProps =
       <TextInput
         style={styles.input}
         placeholder="Password"
+        placeholderTextColor="#999999"
         value={loginPassword}
         onChangeText={setLoginPassword}
         secureTextEntry
@@ -394,6 +402,7 @@ export default function AuthScreen({ initialStep = 'choice' }: AuthScreenProps =
       <TextInput
         style={styles.input}
         placeholder="Email or Phone Number"
+        placeholderTextColor="#999999"
         value={resetIdentifier}
         onChangeText={setResetIdentifier}
         autoCapitalize="none"
@@ -429,6 +438,7 @@ export default function AuthScreen({ initialStep = 'choice' }: AuthScreenProps =
         <TextInput
           style={[styles.input, styles.otpInput]}
           placeholder="000000"
+          placeholderTextColor="#999999"
           value={resetCode}
           onChangeText={setResetCode}
           keyboardType="number-pad"
@@ -438,6 +448,7 @@ export default function AuthScreen({ initialStep = 'choice' }: AuthScreenProps =
         <TextInput
           style={styles.input}
           placeholder="New Password"
+          placeholderTextColor="#999999"
           value={newPassword}
           onChangeText={setNewPassword}
           secureTextEntry
@@ -447,6 +458,7 @@ export default function AuthScreen({ initialStep = 'choice' }: AuthScreenProps =
         <TextInput
           style={styles.input}
           placeholder="Confirm New Password"
+          placeholderTextColor="#999999"
           value={confirmNewPassword}
           onChangeText={setConfirmNewPassword}
           secureTextEntry
