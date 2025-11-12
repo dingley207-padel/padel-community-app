@@ -80,7 +80,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log('[AuthContext] Token validated successfully');
         } catch (error: any) {
           console.error('[AuthContext] Token validation failed - user may have been deleted:', error);
-          // Token is invalid, clear everything
+          // Token is invalid, clear EVERYTHING including PIN settings
+          const { clearSecuritySettings } = await import('../utils/security');
+          await clearSecuritySettings();
           await AsyncStorage.removeItem('authToken');
           await AsyncStorage.removeItem('user');
           setToken(null);
@@ -170,7 +172,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('[AuthContext] Token validated during login');
       } catch (error: any) {
         console.error('[AuthContext] Token validation failed during login - user may have been deleted:', error);
-        // Token is invalid, clear everything and throw error
+        // Token is invalid, clear EVERYTHING including PIN settings
+        const { clearSecuritySettings } = await import('../utils/security');
+        await clearSecuritySettings();
         await AsyncStorage.removeItem('authToken');
         await AsyncStorage.removeItem('user');
         setToken(null);

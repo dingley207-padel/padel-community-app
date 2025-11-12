@@ -234,7 +234,9 @@ export default function AppNavigator({ initialAuthStep }: AppNavigatorProps = {}
                 console.log('[Navigator] Login complete');
               } catch (error: any) {
                 console.error('[Navigator] Login failed:', error);
-                // Clear stored data and show error
+                // Clear stored data including PIN settings and show error
+                const { clearSecuritySettings } = await import('../utils/security');
+                await clearSecuritySettings();
                 await AsyncStorage.removeItem('authToken');
                 await AsyncStorage.removeItem('user');
                 setShowQuickLogin(false);
