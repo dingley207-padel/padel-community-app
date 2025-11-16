@@ -13,7 +13,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.rossdingley.padelone",
-      "buildNumber": "17",
+      "buildNumber": "18",
       "config": {
         "usesNonExemptEncryption": false
       }
