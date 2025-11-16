@@ -74,33 +74,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
 
-        // Validate token with backend to ensure user still exists
-        try {
-          await api.getMyRoles(); // This will fail if token is invalid
-          console.log('[AuthContext] Token validated successfully');
-        } catch (error: any) {
-          // Only treat 401/403/404 as "user deleted" - ignore network errors and 500s
-          const isAuthError = error?.response?.status === 401 ||
-                             error?.response?.status === 403 ||
-                             error?.response?.status === 404;
-
-          if (isAuthError) {
-            console.error('[AuthContext] Token validation failed - user may have been deleted:', error);
-            // Token is invalid, clear EVERYTHING including PIN settings
-            const { clearSecuritySettings } = await import('../utils/security');
-            await clearSecuritySettings();
-            await AsyncStorage.removeItem('authToken');
-            await AsyncStorage.removeItem('user');
-            setToken(null);
-            setUser(null);
-            setIsLoading(false);
-            return;
-          } else {
-            // Network error or server error - just log it and continue
-            console.warn('[AuthContext] Failed to validate token (network/server error), continuing anyway:', error);
-          }
-        }
-
         // Register for push notifications on app startup (not just during login)
         // This ensures push tokens are always up-to-date
         try {
@@ -176,31 +149,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(authData.token);
       setUser(authData.user);
 
-      // Validate token with backend (especially important for stored tokens after PIN entry)
-      try {
-        await refreshRoles(); // This will fail if token is invalid
-        console.log('[AuthContext] Token validated during login');
-      } catch (error: any) {
-        // Only treat 401/403/404 as "user deleted" - ignore network errors and 500s
-        const isAuthError = error?.response?.status === 401 ||
-                           error?.response?.status === 403 ||
-                           error?.response?.status === 404;
-
-        if (isAuthError) {
-          console.error('[AuthContext] Token validation failed - user may have been deleted:', error);
-          // Token is invalid, clear EVERYTHING including PIN settings
-          const { clearSecuritySettings } = await import('../utils/security');
-          await clearSecuritySettings();
-          await AsyncStorage.removeItem('authToken');
-          await AsyncStorage.removeItem('user');
-          setToken(null);
-          setUser(null);
-          throw new Error('Your account no longer exists. Please create a new account.');
-        } else {
-          // Network error or server error - just log it and continue
-          console.warn('[AuthContext] Failed to load roles (network/server error), continuing anyway:', error);
-        }
-      }
+      // Fetch user roles (don't fail login if this fails)
+      await refreshRoles();
 
       // For new users: Register push notifications FIRST, then show PIN setup
       // For existing users (skipPinSetup=true): Just register push notifications
