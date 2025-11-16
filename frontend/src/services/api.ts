@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { authEvents } from '../utils/authEvents';
 
 // Get API URL from environment variables
 const API_URL = Constants.expoConfig?.extra?.apiUrl || process.env.EXPO_PUBLIC_API_URL || process.env.API_URL || 'https://padel-community-app-production.up.railway.app/api';
@@ -36,9 +37,22 @@ class ApiService {
       (response) => response,
       async (error: AxiosError) => {
         if (error.response?.status === 401) {
-          // Token expired or invalid
+          // Token expired or invalid - user may have been deleted
+          // Clear all stored credentials including PIN/biometric settings
+          try {
+            const { clearSecuritySettings } = await import('../utils/security');
+            await clearSecuritySettings();
+          } catch (securityError) {
+            console.error('[API] Failed to clear security settings:', securityError);
+          }
+
           await AsyncStorage.removeItem('authToken');
           await AsyncStorage.removeItem('user');
+
+          // Notify AuthContext that credentials were cleared
+          authEvents.emitUnauthorized();
+
+          console.log('[API] 401 Unauthorized - cleared all credentials and notified listeners');
         }
         return Promise.reject(error);
       }
