@@ -13,6 +13,8 @@ import {
   updateSubCommunity,
   joinCommunityWithSubs,
   deleteSubCommunity,
+  joinSubCommunity,
+  leaveSubCommunity,
 } from '../services/communityService';
 import { sendNotificationToMultipleUsers } from '../services/notificationService';
 import { RoleService } from '../services/roleService';
@@ -437,5 +439,51 @@ export const joinCommunityWithSubsHandler = async (
   } catch (error: any) {
     console.error('Join community with subs error:', error);
     res.status(400).json({ error: error.message || 'Failed to join communities' });
+  }
+};
+
+export const joinSubCommunityHandler = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { id: parentCommunityId, subCommunityId } = req.params;
+
+    await joinSubCommunity(req.user.id, parentCommunityId, subCommunityId);
+
+    res.status(200).json({
+      message: 'Joined sub-community successfully',
+    });
+  } catch (error: any) {
+    console.error('Join sub-community error:', error);
+    res.status(400).json({ error: error.message || 'Failed to join sub-community' });
+  }
+};
+
+export const leaveSubCommunityHandler = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { id: parentCommunityId, subCommunityId } = req.params;
+
+    await leaveSubCommunity(req.user.id, parentCommunityId, subCommunityId);
+
+    res.status(200).json({
+      message: 'Left sub-community successfully',
+    });
+  } catch (error: any) {
+    console.error('Leave sub-community error:', error);
+    res.status(400).json({ error: error.message || 'Failed to leave sub-community' });
   }
 };

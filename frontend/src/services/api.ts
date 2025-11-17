@@ -172,6 +172,20 @@ class ApiService {
     return response.data;
   }
 
+  async joinSubCommunity(parentCommunityId: string, subCommunityId: string) {
+    const response = await this.client.post(
+      `/communities/${parentCommunityId}/sub-communities/${subCommunityId}/join`
+    );
+    return response.data;
+  }
+
+  async leaveSubCommunity(parentCommunityId: string, subCommunityId: string) {
+    const response = await this.client.post(
+      `/communities/${parentCommunityId}/sub-communities/${subCommunityId}/leave`
+    );
+    return response.data;
+  }
+
   async createSubCommunity(communityId: string, data: any) {
     const response = await this.client.post(`/communities/${communityId}/sub-communities`, data);
     return response.data;

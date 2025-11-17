@@ -16,6 +16,8 @@ import {
   updateSubCommunityHandler,
   deleteSubCommunityHandler,
   joinCommunityWithSubsHandler,
+  joinSubCommunityHandler,
+  leaveSubCommunityHandler,
 } from '../controllers/communityController';
 import { authenticate, requireRole, optionalAuth } from '../middleware/auth';
 import { validate } from '../middleware/validation';
@@ -139,6 +141,20 @@ router.post(
     body('sub_community_ids').isArray().withMessage('sub_community_ids must be an array'),
   ]),
   joinCommunityWithSubsHandler
+);
+
+// Join a sub-community
+router.post(
+  '/:id/sub-communities/:subCommunityId/join',
+  authenticate,
+  joinSubCommunityHandler
+);
+
+// Leave a sub-community
+router.post(
+  '/:id/sub-communities/:subCommunityId/leave',
+  authenticate,
+  leaveSubCommunityHandler
 );
 
 export default router;

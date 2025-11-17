@@ -462,3 +462,43 @@ export const deleteSubCommunity = async (
 
   console.log('[deleteSubCommunity] Successfully deleted sub-community:', subCommunityId);
 };
+
+export const joinSubCommunity = async (
+  userId: string,
+  parentCommunityId: string,
+  subCommunityId: string
+): Promise<void> => {
+  // Verify sub-community belongs to parent
+  const { data: subCommunity } = await supabase
+    .from('communities')
+    .select('parent_community_id')
+    .eq('id', subCommunityId)
+    .single();
+
+  if (!subCommunity || subCommunity.parent_community_id !== parentCommunityId) {
+    throw new Error('Sub-community not found or does not belong to this community');
+  }
+
+  // Use the existing joinCommunity function (it works for both parent and sub-communities)
+  await joinCommunity(userId, subCommunityId);
+};
+
+export const leaveSubCommunity = async (
+  userId: string,
+  parentCommunityId: string,
+  subCommunityId: string
+): Promise<void> => {
+  // Verify sub-community belongs to parent
+  const { data: subCommunity } = await supabase
+    .from('communities')
+    .select('parent_community_id')
+    .eq('id', subCommunityId)
+    .single();
+
+  if (!subCommunity || subCommunity.parent_community_id !== parentCommunityId) {
+    throw new Error('Sub-community not found or does not belong to this community');
+  }
+
+  // Use the existing leaveCommunity function
+  await leaveCommunity(userId, subCommunityId);
+};
