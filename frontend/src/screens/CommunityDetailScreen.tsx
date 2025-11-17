@@ -72,6 +72,8 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
   const [subCommunities, setSubCommunities] = useState<Community[]>([]);
   const [showSubCommunitiesModal, setShowSubCommunitiesModal] = useState(false);
   const [subCommunityMemberships, setSubCommunityMemberships] = useState<{[key: string]: boolean}>({});
+  const [isLoadingSubCommunities, setIsLoadingSubCommunities] = useState(false);
+  const [joiningSubCommunities, setJoiningSubCommunities] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadCommunityDetails();
@@ -107,13 +109,30 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
 
   const loadSubCommunities = async () => {
     try {
-      const subCommunitiesData = await api.getSubCommunities(communityId);
+      setIsLoadingSubCommunities(true);
+
+      // Fetch both sub-communities and user communities in parallel
+      const [subCommunitiesData, userCommunitiesResponse] = await Promise.all([
+        api.getSubCommunities(communityId),
+        api.getUserCommunities()
+      ]);
+
       setSubCommunities(subCommunitiesData);
 
       // Check membership for each sub-community
-      await checkSubCommunityMemberships(subCommunitiesData);
+      const myCommunities = userCommunitiesResponse.communities || userCommunitiesResponse.data?.communities || [];
+      const mySubCommunityIds = new Set(myCommunities.map((c: Community) => c.id));
+
+      const memberships: {[key: string]: boolean} = {};
+      subCommunitiesData.forEach(sub => {
+        memberships[sub.id] = mySubCommunityIds.has(sub.id);
+      });
+
+      setSubCommunityMemberships(memberships);
     } catch (error) {
       console.error('Load sub-communities error:', error);
+    } finally {
+      setIsLoadingSubCommunities(false);
     }
   };
 
@@ -146,36 +165,104 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
 
   const handleJoinSubCommunity = async (subCommunityId: string) => {
     try {
-      await api.joinSubCommunity(communityId, subCommunityId);
+      // Mark as joining for loading state
+      setJoiningSubCommunities(prev => new Set(prev).add(subCommunityId));
 
-      // Update membership state
+      // Optimistic update - update UI immediately
       setSubCommunityMemberships(prev => ({
         ...prev,
         [subCommunityId]: true
       }));
 
-      // Reload sub-communities to update member count
-      await loadSubCommunities();
+      // Optimistically update member count
+      setSubCommunities(prev => prev.map(sub =>
+        sub.id === subCommunityId
+          ? { ...sub, member_count: (sub.member_count || 0) + 1 }
+          : sub
+      ));
+
+      // Make API call in background
+      await api.joinSubCommunity(communityId, subCommunityId);
+
+      // Remove from joining state
+      setJoiningSubCommunities(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(subCommunityId);
+        return newSet;
+      });
     } catch (error: any) {
       console.error('Join sub-community error:', error);
+
+      // Revert optimistic updates on error
+      setSubCommunityMemberships(prev => ({
+        ...prev,
+        [subCommunityId]: false
+      }));
+
+      setSubCommunities(prev => prev.map(sub =>
+        sub.id === subCommunityId
+          ? { ...sub, member_count: Math.max((sub.member_count || 0) - 1, 0) }
+          : sub
+      ));
+
+      setJoiningSubCommunities(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(subCommunityId);
+        return newSet;
+      });
+
       Alert.alert('Error', error.response?.data?.error || 'Failed to join sub-community');
     }
   };
 
   const handleLeaveSubCommunity = async (subCommunityId: string) => {
     try {
-      await api.leaveSubCommunity(communityId, subCommunityId);
+      // Mark as joining (processing) for loading state
+      setJoiningSubCommunities(prev => new Set(prev).add(subCommunityId));
 
-      // Update membership state
+      // Optimistic update - update UI immediately
       setSubCommunityMemberships(prev => ({
         ...prev,
         [subCommunityId]: false
       }));
 
-      // Reload sub-communities to update member count
-      await loadSubCommunities();
+      // Optimistically update member count
+      setSubCommunities(prev => prev.map(sub =>
+        sub.id === subCommunityId
+          ? { ...sub, member_count: Math.max((sub.member_count || 0) - 1, 0) }
+          : sub
+      ));
+
+      // Make API call in background
+      await api.leaveSubCommunity(communityId, subCommunityId);
+
+      // Remove from joining state
+      setJoiningSubCommunities(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(subCommunityId);
+        return newSet;
+      });
     } catch (error: any) {
       console.error('Leave sub-community error:', error);
+
+      // Revert optimistic updates on error
+      setSubCommunityMemberships(prev => ({
+        ...prev,
+        [subCommunityId]: true
+      }));
+
+      setSubCommunities(prev => prev.map(sub =>
+        sub.id === subCommunityId
+          ? { ...sub, member_count: (sub.member_count || 0) + 1 }
+          : sub
+      ));
+
+      setJoiningSubCommunities(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(subCommunityId);
+        return newSet;
+      });
+
       Alert.alert('Error', error.response?.data?.error || 'Failed to leave sub-community');
     }
   };
@@ -613,72 +700,94 @@ export default function CommunityDetailScreen({ communityId, onBack, showBackBut
             </View>
 
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-              {subCommunities.map((subCommunity, index) => {
-                const isMember = subCommunityMemberships[subCommunity.id];
-                return (
-                  <View
-                    key={subCommunity.id}
-                    style={[
-                      styles.modalSubCommunityItem,
-                      index === subCommunities.length - 1 && styles.modalSubCommunityItemLast
-                    ]}
-                  >
-                    {/* Logo */}
-                    <View style={styles.modalSubCommunityLogoContainer}>
-                      {subCommunity.profile_image ? (
-                        <Image
-                          source={{ uri: subCommunity.profile_image }}
-                          style={styles.modalSubCommunityLogo}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={styles.modalSubCommunityLogoPlaceholder}>
-                          <Ionicons name="people" size={24} color={Colors.secondary} />
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Info */}
-                    <View style={styles.modalSubCommunityInfo}>
-                      <Text style={styles.modalSubCommunityName}>{subCommunity.name}</Text>
-                      {subCommunity.location && (
-                        <View style={styles.modalSubCommunityLocationContainer}>
-                          <Ionicons name="location-outline" size={14} color={Colors.secondary} />
-                          <Text style={styles.modalSubCommunityLocation}>{subCommunity.location}</Text>
-                        </View>
-                      )}
-                      {subCommunity.member_count !== undefined && (
-                        <Text style={styles.modalSubCommunityMembers}>
-                          {subCommunity.member_count} {subCommunity.member_count === 1 ? 'member' : 'members'}
-                        </Text>
-                      )}
-                    </View>
-
-                    {/* Join/Leave Button */}
-                    <TouchableOpacity
+              {isLoadingSubCommunities ? (
+                <View style={styles.modalLoadingContainer}>
+                  <ActivityIndicator size="large" color={Colors.brand} />
+                  <Text style={styles.modalLoadingText}>Loading sub-communities...</Text>
+                </View>
+              ) : subCommunities.length === 0 ? (
+                <View style={styles.modalEmptyContainer}>
+                  <Ionicons name="people-outline" size={48} color={Colors.secondary} />
+                  <Text style={styles.modalEmptyText}>No sub-communities yet</Text>
+                </View>
+              ) : (
+                subCommunities.map((subCommunity, index) => {
+                  const isMember = subCommunityMemberships[subCommunity.id];
+                  const isProcessing = joiningSubCommunities.has(subCommunity.id);
+                  return (
+                    <View
+                      key={subCommunity.id}
                       style={[
-                        styles.subCommunityActionButton,
-                        isMember ? styles.subCommunityLeaveButton : styles.subCommunityJoinButton
+                        styles.modalSubCommunityItem,
+                        index === subCommunities.length - 1 && styles.modalSubCommunityItemLast
                       ]}
-                      onPress={() => {
-                        if (isMember) {
-                          handleLeaveSubCommunity(subCommunity.id);
-                        } else {
-                          handleJoinSubCommunity(subCommunity.id);
-                        }
-                      }}
-                      activeOpacity={0.7}
                     >
-                      <Text style={[
-                        styles.subCommunityActionButtonText,
-                        isMember ? styles.subCommunityLeaveButtonText : styles.subCommunityJoinButtonText
-                      ]}>
-                        {isMember ? 'Leave' : 'Join'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
+                      {/* Logo */}
+                      <View style={styles.modalSubCommunityLogoContainer}>
+                        {subCommunity.profile_image ? (
+                          <Image
+                            source={{ uri: subCommunity.profile_image }}
+                            style={styles.modalSubCommunityLogo}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={styles.modalSubCommunityLogoPlaceholder}>
+                            <Ionicons name="people" size={24} color={Colors.secondary} />
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Info */}
+                      <View style={styles.modalSubCommunityInfo}>
+                        <Text style={styles.modalSubCommunityName}>{subCommunity.name}</Text>
+                        {subCommunity.location && (
+                          <View style={styles.modalSubCommunityLocationContainer}>
+                            <Ionicons name="location-outline" size={14} color={Colors.secondary} />
+                            <Text style={styles.modalSubCommunityLocation}>{subCommunity.location}</Text>
+                          </View>
+                        )}
+                        {subCommunity.member_count !== undefined && (
+                          <Text style={styles.modalSubCommunityMembers}>
+                            {subCommunity.member_count} {subCommunity.member_count === 1 ? 'member' : 'members'}
+                          </Text>
+                        )}
+                      </View>
+
+                      {/* Join/Leave Button */}
+                      <TouchableOpacity
+                        style={[
+                          styles.subCommunityActionButton,
+                          isMember ? styles.subCommunityLeaveButton : styles.subCommunityJoinButton,
+                          isProcessing && styles.subCommunityActionButtonDisabled
+                        ]}
+                        onPress={() => {
+                          if (isMember) {
+                            handleLeaveSubCommunity(subCommunity.id);
+                          } else {
+                            handleJoinSubCommunity(subCommunity.id);
+                          }
+                        }}
+                        disabled={isProcessing}
+                        activeOpacity={0.7}
+                      >
+                        {isProcessing ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={isMember ? Colors.textSecondary : '#FFFFFF'}
+                          />
+                        ) : (
+                          <Text style={[
+                            styles.subCommunityActionButtonText,
+                            isMember ? styles.subCommunityLeaveButtonText : styles.subCommunityJoinButtonText
+                          ]}>
+                            {isMember ? 'Leave' : 'Join'}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })
+              )}
             </ScrollView>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -1235,6 +1344,29 @@ const styles = StyleSheet.create({
     color: Colors.dark,
   },
   subCommunityLeaveButtonText: {
+    color: Colors.textSecondary,
+  },
+  subCommunityActionButtonDisabled: {
+    opacity: 0.6,
+  },
+  modalLoadingContainer: {
+    paddingVertical: Spacing.xxl * 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalLoadingText: {
+    marginTop: Spacing.md,
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  modalEmptyContainer: {
+    paddingVertical: Spacing.xxl * 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalEmptyText: {
+    marginTop: Spacing.md,
+    fontSize: 16,
     color: Colors.textSecondary,
   },
 });
