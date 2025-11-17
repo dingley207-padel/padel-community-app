@@ -13,7 +13,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.rossdingley.padelone",
-      "buildNumber": "22",
+      "buildNumber": "23",
       "config": {
         "usesNonExemptEncryption": false
       }
@@ -29,6 +29,12 @@
       "eas": {
         "projectId": "92e5d0f0-798a-4f20-9d98-c2ab51a2163f"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/92e5d0f0-798a-4f20-9d98-c2ab51a2163f"
     }
   }
 }
