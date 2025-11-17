@@ -7,7 +7,9 @@ class AuthEvents {
   // Subscribe to unauthorized events
   onUnauthorized(listener: AuthEventListener) {
     this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   // Emit unauthorized event (called from API interceptor)
