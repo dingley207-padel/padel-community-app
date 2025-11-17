@@ -3,7 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import { User, AuthResponse } from '../types';
 import { registerForPushNotificationsAsync } from '../utils/notifications';
-import { authEvents } from '../utils/authEvents';
 
 export interface UserRole {
   role_name: string;
@@ -43,22 +42,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     loadStoredAuth();
-  }, []);
-
-  // Listen for 401 Unauthorized events from API interceptor
-  // When a user's token becomes invalid (e.g., deleted from DB), clear the state
-  useEffect(() => {
-    const unsubscribe = authEvents.onUnauthorized(() => {
-      console.log('[AuthContext] Received unauthorized event - clearing auth state');
-      setToken(null);
-      setUser(null);
-      setUserRoles([]);
-      setSelectedRole(null);
-      setIsSuperAdmin(false);
-      setIsCommunityManager(false);
-    });
-
-    return unsubscribe;
   }, []);
 
   const loadStoredAuth = async () => {
@@ -166,7 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(authData.token);
       setUser(authData.user);
 
-      // Fetch user roles (don't fail login if this fails)
+      // Fetch user roles
       await refreshRoles();
 
       // For new users: Register push notifications FIRST, then show PIN setup

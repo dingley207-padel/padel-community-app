@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar, Animated, StyleSheet, View } from 'react-native';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { InAppNotificationProvider } from './src/contexts/InAppNotificationContext';
