@@ -131,10 +131,12 @@ export default function AppNavigator({ initialAuthStep }: AppNavigatorProps = {}
     if (!user) {
       console.log('[Navigator] No user - checking for stored credentials and PIN settings');
       // Get stored user for display name
+      let hasStoredToken = false;
       try {
         const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
         const storedUserData = await AsyncStorage.getItem('user');
         const storedToken = await AsyncStorage.getItem('authToken');
+        hasStoredToken = !!storedToken;
         console.log('[Navigator] Has stored user data:', !!storedUserData, 'Has stored token:', !!storedToken);
 
         if (storedUserData) {
@@ -152,12 +154,20 @@ export default function AppNavigator({ initialAuthStep }: AppNavigatorProps = {}
       console.log('[Navigator] PIN Check Results:');
       console.log('[Navigator]   - PIN Enabled:', pinEnabledSetting);
       console.log('[Navigator]   - PIN Exists:', pinExists);
+      console.log('[Navigator]   - Has Stored Token:', hasStoredToken);
 
-      if (pinEnabledSetting && pinExists) {
+      // Only show quick login if PIN is set AND there's a valid auth token
+      // If PIN exists but no token, clear the PIN (user deleted app and reinstalled)
+      if (pinEnabledSetting && pinExists && hasStoredToken) {
         console.log('[Navigator] ===== SHOWING QUICK LOGIN SCREEN =====');
         setShowQuickLogin(true);
       } else {
-        console.log('[Navigator] ===== PIN NOT ENABLED - SHOWING REGULAR AUTH =====');
+        if ((pinEnabledSetting || pinExists) && !hasStoredToken) {
+          console.log('[Navigator] ===== PIN EXISTS BUT NO TOKEN - CLEARING PIN SETTINGS =====');
+          const { clearSecuritySettings } = await import('../utils/security');
+          await clearSecuritySettings();
+        }
+        console.log('[Navigator] ===== PIN NOT ENABLED OR NO TOKEN - SHOWING REGULAR AUTH =====');
         setShowQuickLogin(false);
       }
     } else {
