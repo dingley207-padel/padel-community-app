@@ -222,31 +222,14 @@ export default function AppNavigator({ initialAuthStep }: AppNavigatorProps = {}
           onSuccess={async () => {
             console.log('[Navigator] Quick login successful, reloading auth state');
             const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-            const Alert = (await import('react-native')).Alert;
             const storedToken = await AsyncStorage.getItem('authToken');
             const storedUser = await AsyncStorage.getItem('user');
             console.log('[Navigator] Stored token exists:', !!storedToken);
             console.log('[Navigator] Stored user exists:', !!storedUser);
             if (storedToken && storedUser) {
               console.log('[Navigator] Calling login with stored data');
-              try {
-                await login({ token: storedToken, user: JSON.parse(storedUser), message: '' }, true);
-                console.log('[Navigator] Login complete');
-              } catch (error: any) {
-                console.error('[Navigator] Login failed:', error);
-                // Clear stored data including PIN settings and show error
-                const { clearSecuritySettings } = await import('../utils/security');
-                await clearSecuritySettings();
-                await AsyncStorage.removeItem('authToken');
-                await AsyncStorage.removeItem('user');
-                setShowQuickLogin(false);
-                setStoredUserName(undefined);
-                Alert.alert(
-                  'Account Not Found',
-                  error.message || 'Your account no longer exists. Please create a new account.',
-                  [{ text: 'OK' }]
-                );
-              }
+              await login({ token: storedToken, user: JSON.parse(storedUser), message: '' }, true);
+              console.log('[Navigator] Login complete');
             } else {
               console.log('[Navigator] ERROR: No stored token found! Redirecting to password login');
               setShowQuickLogin(false);
